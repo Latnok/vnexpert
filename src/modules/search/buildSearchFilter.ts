@@ -44,6 +44,12 @@ export function buildSearchFilter(input: BuildSearchFilterInput): Filter<Message
   }
   const isBikeQuery = parsed.categories?.includes("bike_rent") ?? false;
   const isRealEstateQuery = parsed.categories?.includes("real_estate_rent") ?? false;
+  const isFoodQuery = parsed.categories?.includes("food_place") ?? false;
+  const isVisaranQuery = parsed.categories?.includes("visaran") ?? false;
+  const isJobQuery = parsed.categories?.includes("job_vacancy") ?? false;
+  const isCityEventQuery = parsed.categories?.includes("city_event") ?? false;
+  const isCasinoQuery = parsed.categories?.includes("casino_poker") ?? false;
+  const isExcursionsQuery = parsed.categories?.includes("excursions") ?? false;
   if (isBikeQuery) {
     // Bike search relies only on structured DB fields from extracted_bike.
     filter["extracted_bike.is_bike_ad"] = true;
@@ -69,9 +75,60 @@ export function buildSearchFilter(input: BuildSearchFilterInput): Filter<Message
       ];
     }
   }
+  if (isFoodQuery) {
+    if (parsed.foodFilters?.area) {
+      filter["extracted_food.location.area.normalized"] = parsed.foodFilters.area;
+    }
+    if (parsed.foodFilters?.primaryCuisine) {
+      filter["extracted_food.primary_cuisine"] = parsed.foodFilters.primaryCuisine;
+    }
+    if (parsed.foodFilters?.cuisineTag) {
+      filter["extracted_food.cuisine_tags"] = parsed.foodFilters.cuisineTag;
+    }
+  }
+  if (isVisaranQuery) {
+    if (parsed.visaranFilters?.direction) {
+      filter["extracted_visaran.direction_primary"] = parsed.visaranFilters.direction;
+    }
+  }
+  if (isJobQuery) {
+    if (parsed.jobFilters?.workFormat) {
+      filter["extracted_job.work_format"] = parsed.jobFilters.workFormat;
+    }
+    if (parsed.jobFilters?.employmentType) {
+      filter["extracted_job.employment_type"] = parsed.jobFilters.employmentType;
+    }
+  }
+  if (isCityEventQuery && parsed.cityEventFilters?.ticketRequired !== undefined) {
+    filter["extracted_city_event.ticket_required"] = parsed.cityEventFilters.ticketRequired;
+  }
+  if (isCasinoQuery) {
+    if (parsed.casinoFilters?.gameType) {
+      filter["extracted_casino_poker.game_type"] = parsed.casinoFilters.gameType;
+    }
+    if (parsed.casinoFilters?.pokerFormat) {
+      filter["extracted_casino_poker.poker_format"] = parsed.casinoFilters.pokerFormat;
+    }
+  }
+  if (isExcursionsQuery && parsed.excursionFilters?.tourType) {
+    filter["extracted_excursions.tour_type"] = parsed.excursionFilters.tourType;
+  }
 
   if (parsed.priceRange?.min !== undefined || parsed.priceRange?.max !== undefined) {
-    const pricePath = isBikeQuery && !isRealEstateQuery ? "extracted_bike.price_primary.amount" : "extracted_real_estate.price_primary.amount";
+    let pricePath = "extracted_real_estate.price_primary.amount";
+    if (isBikeQuery && !isRealEstateQuery) {
+      pricePath = "extracted_bike.price_primary.amount";
+    } else if (isVisaranQuery) {
+      pricePath = "extracted_visaran.price_primary.amount";
+    } else if (isJobQuery) {
+      pricePath = "extracted_job.salary_primary.amount";
+    } else if (isCityEventQuery) {
+      pricePath = "extracted_city_event.price_primary.amount";
+    } else if (isCasinoQuery) {
+      pricePath = "extracted_casino_poker.buy_in_primary.amount";
+    } else if (isExcursionsQuery) {
+      pricePath = "extracted_excursions.price_primary.amount";
+    }
     filter[pricePath] = {};
     if (parsed.priceRange.min !== undefined) {
       filter[pricePath].$gte = parsed.priceRange.min;

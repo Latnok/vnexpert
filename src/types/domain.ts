@@ -37,6 +37,28 @@ export type ParsedQuery = {
     location?: LocationMarker | "vinh_hai" | "phuoc_long" | "an_vien" | "my_gia";
     period?: "day" | "week" | "month";
   };
+  foodFilters?: {
+    area?: LocationMarker;
+    primaryCuisine?: "local" | "european" | "mixed" | "unknown";
+    cuisineTag?: string;
+  };
+  visaranFilters?: {
+    direction?: "laos" | "cambodia" | "thailand" | "mixed" | "unknown";
+  };
+  jobFilters?: {
+    workFormat?: "remote" | "hybrid" | "onsite" | "unknown";
+    employmentType?: "full_time" | "part_time" | "shift" | "unknown";
+  };
+  cityEventFilters?: {
+    ticketRequired?: boolean;
+  };
+  casinoFilters?: {
+    gameType?: "poker" | "casino" | "mixed" | "unknown";
+    pokerFormat?: "cash" | "tournament" | "unknown";
+  };
+  excursionFilters?: {
+    tourType?: "islands" | "diving" | "city_tour" | "waterfall" | "fishing" | "private" | "unknown";
+  };
   currencyPairs?: CurrencyPair[];
   locationMarker?: LocationMarker;
   needsClarification: boolean;

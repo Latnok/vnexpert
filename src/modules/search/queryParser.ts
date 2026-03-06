@@ -57,7 +57,27 @@ const CATEGORY_HINTS: Record<AdCategory, string[]> = {
     "посуточно"
   ],
   bike_rent: ["байк", "байки", "мотик", "мото", "скутер", "bike", "scooter", "honda", "yamaha", "аренда байка"],
-  food_place: ["кафе", "ресторан", "бар", "кофе", "кофейня", "еда", "поесть", "food", "breakfast", "dinner"],
+  food_place: [
+    "кафе",
+    "ресторан",
+    "бар",
+    "кальян",
+    "hookah",
+    "lounge",
+    "кофе",
+    "кофейня",
+    "еда",
+    "поесть",
+    "кухн",
+    "европейск",
+    "азиатск",
+    "вьетнамск",
+    "завтрак",
+    "ужин",
+    "food",
+    "breakfast",
+    "dinner"
+  ],
   job_vacancy: ["вакансия", "работа", "ищем", "требуется", "нанимаем", "job", "vacancy", "hiring", "официант", "курьер"],
   city_event: [
     "событие",
@@ -73,7 +93,7 @@ const CATEGORY_HINTS: Record<AdCategory, string[]> = {
     "party",
     "meetup"
   ],
-  currency_exchange: ["обмен", "меняю", "курс", "валюта", "руб", "дол", "usd", "usdt", "rub", "vnd"],
+  currency_exchange: ["обмен", "меняю", "валюта", "руб", "дол", "usd", "usdt", "rub", "vnd"],
   casino_poker: ["казино", "покер", "poker", "casino", "турнир", "ставки", "бет", "blackjack", "roulette"],
   visaran: ["визаран", "visa run", "виза ран", "бордер ран", "border run", "продление визы", "продлен", "виза", "визы"],
   excursions: ["экскурсия", "экскурсии", "тур", "туры", "поездка", "гид", "trip", "tour", "excursion", "острова", "дайвинг"],
@@ -153,6 +173,9 @@ function extractCategories(text: string): AdCategory[] | undefined {
     if (hints.some((hint) => text.includes(hint))) {
       found.push(category);
     }
+  }
+  if (found.includes("food_place") && found.includes("real_estate_rent")) {
+    return found.filter((cat) => cat !== "real_estate_rent");
   }
   return found.length ? found : undefined;
 }
@@ -285,6 +308,125 @@ function extractBikePeriod(text: string): "day" | "week" | "month" | undefined {
   return undefined;
 }
 
+function extractFoodFilters(text: string): ParsedQuery["foodFilters"] | undefined {
+  let area = extractLocationMarker(text);
+  if (!area && /центр|в центре/i.test(text)) {
+    area = "center";
+  }
+  if (!area && /север|на севере/i.test(text)) {
+    area = "north";
+  }
+  if (!area && /юг|на юге/i.test(text)) {
+    area = "south";
+  }
+  const cuisineTag = ["vietnamese", "italian", "steakhouse", "burger", "japanese", "korean"].find((tag) =>
+    text.includes(tag)
+  );
+  let primaryCuisine: "local" | "european" | "mixed" | "unknown" | undefined;
+  if (/вьетнам|vietnam|фо|bun|com tam/i.test(text)) {
+    primaryCuisine = "local";
+  } else if (/европ|europe|italian|pizza|pasta|steak|burger/i.test(text)) {
+    primaryCuisine = "european";
+  }
+  if (!area && !cuisineTag && !primaryCuisine) {
+    return undefined;
+  }
+  return { area, cuisineTag, primaryCuisine };
+}
+
+function extractVisaranFilters(text: string): ParsedQuery["visaranFilters"] | undefined {
+  if (/лаос|laos/i.test(text)) {
+    return { direction: "laos" };
+  }
+  if (/камбодж|cambodia/i.test(text)) {
+    return { direction: "cambodia" };
+  }
+  if (/таиланд|тайланд|thailand/i.test(text)) {
+    return { direction: "thailand" };
+  }
+  return undefined;
+}
+
+function extractJobFilters(text: string): ParsedQuery["jobFilters"] | undefined {
+  let workFormat: "remote" | "hybrid" | "onsite" | "unknown" | undefined;
+  if (/remote|удален|онлайн/i.test(text)) {
+    workFormat = "remote";
+  } else if (/hybrid|гибрид/i.test(text)) {
+    workFormat = "hybrid";
+  } else if (/офис|onsite|на месте/i.test(text)) {
+    workFormat = "onsite";
+  }
+
+  let employmentType: "full_time" | "part_time" | "shift" | "unknown" | undefined;
+  if (/full[-_\s]?time|полный день|фултайм/i.test(text)) {
+    employmentType = "full_time";
+  } else if (/part[-_\s]?time|частич|парттайм/i.test(text)) {
+    employmentType = "part_time";
+  } else if (/смен|shift/i.test(text)) {
+    employmentType = "shift";
+  }
+  if (!workFormat && !employmentType) {
+    return undefined;
+  }
+  return { workFormat, employmentType };
+}
+
+function extractCityEventFilters(text: string): ParsedQuery["cityEventFilters"] | undefined {
+  if (/билет|ticket|вход платный|entry fee/i.test(text)) {
+    return { ticketRequired: true };
+  }
+  if (/бесплатно|free entry|free/i.test(text)) {
+    return { ticketRequired: false };
+  }
+  return undefined;
+}
+
+function extractCasinoFilters(text: string): ParsedQuery["casinoFilters"] | undefined {
+  let gameType: "poker" | "casino" | "mixed" | "unknown" | undefined;
+  const hasPoker = /покер|poker/i.test(text);
+  const hasCasino = /казино|casino/i.test(text);
+  if (hasPoker && hasCasino) {
+    gameType = "mixed";
+  } else if (hasPoker) {
+    gameType = "poker";
+  } else if (hasCasino) {
+    gameType = "casino";
+  }
+
+  let pokerFormat: "cash" | "tournament" | "unknown" | undefined;
+  if (/cash|кэш/i.test(text)) {
+    pokerFormat = "cash";
+  } else if (/турнир|tournament|mtt/i.test(text)) {
+    pokerFormat = "tournament";
+  }
+  if (!gameType && !pokerFormat) {
+    return undefined;
+  }
+  return { gameType, pokerFormat };
+}
+
+function extractExcursionFilters(text: string): ParsedQuery["excursionFilters"] | undefined {
+  if (/остров|island/i.test(text)) {
+    return { tourType: "islands" };
+  }
+  if (/дайв|diving/i.test(text)) {
+    return { tourType: "diving" };
+  }
+  if (/city tour|обзорн|по городу/i.test(text)) {
+    return { tourType: "city_tour" };
+  }
+  if (/водопад|waterfall/i.test(text)) {
+    return { tourType: "waterfall" };
+  }
+  if (/рыбал|fishing/i.test(text)) {
+    return { tourType: "fishing" };
+  }
+  if (/private|индивидуал/i.test(text)) {
+    return { tourType: "private" };
+  }
+  return undefined;
+}
+
 function tokenize(text: string): string[] {
   return text
     .toLowerCase()
@@ -312,6 +454,12 @@ export function parseQuery(raw: string): ParsedQuery {
           period: extractBikePeriod(normalized)
         }
       : undefined;
+  const foodFilters = categories?.includes("food_place") ? extractFoodFilters(normalized) : undefined;
+  const visaranFilters = categories?.includes("visaran") ? extractVisaranFilters(normalized) : undefined;
+  const jobFilters = categories?.includes("job_vacancy") ? extractJobFilters(normalized) : undefined;
+  const cityEventFilters = categories?.includes("city_event") ? extractCityEventFilters(normalized) : undefined;
+  const casinoFilters = categories?.includes("casino_poker") ? extractCasinoFilters(normalized) : undefined;
+  const excursionFilters = categories?.includes("excursions") ? extractExcursionFilters(normalized) : undefined;
   const priceRange = extractPriceRange(normalized);
   const dateRange = extractDateRange(normalized);
 
@@ -331,7 +479,16 @@ export function parseQuery(raw: string): ParsedQuery {
     needsClarification = true;
     clarificationPrompt = "Не хватает ключевых слов. Уточните, что именно искать.";
   }
-  if (priceRange && categories && !categories.includes("real_estate_rent")) {
+  const categoriesAllowingPriceRange: AdCategory[] = [
+    "real_estate_rent",
+    "bike_rent",
+    "visaran",
+    "job_vacancy",
+    "city_event",
+    "casino_poker",
+    "excursions"
+  ];
+  if (priceRange && categories && !categories.some((cat) => categoriesAllowingPriceRange.includes(cat))) {
     needsClarification = true;
     clarificationPrompt = "Диапазон цены обычно применим к недвижимости. Уточните категорию поиска.";
   }
@@ -345,6 +502,12 @@ export function parseQuery(raw: string): ParsedQuery {
     isQa,
     priceRange,
     bikeFilters,
+    foodFilters,
+    visaranFilters,
+    jobFilters,
+    cityEventFilters,
+    casinoFilters,
+    excursionFilters,
     currencyPairs,
     locationMarker,
     needsClarification,

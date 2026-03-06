@@ -63,6 +63,8 @@
 Бизнес-правила:
 - Если `has_media=false`, сообщение считается не-рекламным и уходит в `ad_category="ignored"` с `ignored_subtype="text_no_media"`.
 - Для `bike_rent` есть дополнительная валидация объявления: обязательно `has_media=true`, есть цена, и есть bike-сигнал. Иначе -> `ad_category="other"`, `classification_reason="bike_validation_failed"`.
+- Для пересечения `city_event` и `casino_poker`: при сильных poker/casino-сигналах итоговая категория принудительно `casino_poker` с `classification_reason="casino_overlap_city_event"`.
+- Для пересечения `city_event` и `excursions`: при сильных excursion/tour-сигналах итоговая категория принудительно `excursions` с `classification_reason="excursions_overlap_city_event"`.
 
 Текущие категории:
 - `real_estate_rent`
@@ -92,6 +94,12 @@
 |---|---|---|
 | `extracted_real_estate` | object\|null | извлечение по недвижимости |
 | `extracted_bike` | object\|null | извлечение по байкам |
+| `extracted_food` | object\|null | извлечение по кафе/бар/ресторан |
+| `extracted_visaran` | object\|null | извлечение по визаранам |
+| `extracted_job` | object\|null | извлечение по вакансиям |
+| `extracted_city_event` | object\|null | извлечение по событиям города |
+| `extracted_casino_poker` | object\|null | извлечение по казино/покеру |
+| `extracted_excursions` | object\|null | извлечение по экскурсиям |
 | `extracted_currency` | object\|null | извлечение курсов валют |
 
 `extracted_real_estate` (`parser_version: re_v3`):
@@ -118,6 +126,56 @@
 - `deposit`
 - `delivery`
 - `documents`
+
+`extracted_food` (`parser_version: food_v1`):
+- `location.address: string|null` (адрес/строка локации)
+- `location.geolocation.links: string[]` (maps-ссылки)
+- `location.geolocation.coordinates: { lat, lon }|null`
+- `location.area: { raw, normalized }|null` (`north|south|center|west|east`)
+- `primary_cuisine: "local" | "european" | "mixed" | "unknown"`
+- `cuisine_tags: string[]` (напр. `vietnamese`, `italian`, `steakhouse`, `burger`)
+
+`extracted_visaran` (`parser_version: visaran_v1`):
+- `direction_primary: "laos" | "cambodia" | "thailand" | "mixed" | "unknown"`
+- `price_primary: { raw, amount, currency }|null`
+- `pickup_info: string|null`
+
+`extracted_job` (`parser_version: job_v1`):
+- `position_title: string|null`
+- `salary_primary: { raw, amount, currency, period }|null`
+- `work_format: "remote" | "hybrid" | "onsite" | "unknown"`
+- `employment_type: "full_time" | "part_time" | "shift" | "unknown"`
+- `location: { raw, normalized }|null`
+- `contact_handles: string[]`
+
+`extracted_city_event` (`parser_version: city_event_v1`):
+- `event_title: string|null`
+- `event_date_raw: string|null`
+- `event_time_raw: string|null`
+- `location: string|null`
+- `price_primary: { raw, amount, currency }|null`
+- `ticket_required: boolean`
+- `contact_handles: string[]`
+
+`extracted_casino_poker` (`parser_version: casino_v1`):
+- `game_type: "poker" | "casino" | "mixed" | "unknown"`
+- `poker_format: "cash" | "tournament" | "unknown"`
+- `blinds_raw: string|null` (пример: `25/50`)
+- `buy_in_primary: { raw, amount, currency }|null`
+- `event_date_raw: string|null`
+- `event_time_raw: string|null`
+- `location: string|null`
+- `contact_handles: string[]`
+
+`extracted_excursions` (`parser_version: excursions_v1`):
+- `tour_type: "islands" | "diving" | "city_tour" | "waterfall" | "fishing" | "private" | "unknown"`
+- `destinations: string[]`
+- `duration: { raw, value, unit }|null` (`day|hour`)
+- `departure_date_raw: string|null`
+- `departure_time_raw: string|null`
+- `price_primary: { raw, amount, currency }|null`
+- `pickup_info: string|null`
+- `contact_handles: string[]`
 
 `extracted_currency` (`parser_version: fx_v4`):
 - `vnd_rub`
@@ -204,6 +262,12 @@
 - `is_question_like` / `is_qa`
 - для `real_estate_rent`: `extracted_real_estate.price_primary.amount`, `contract_term`, `location`, `other_expenses`
 - для `bike_rent`: `extracted_bike.is_bike_ad`, `deal_type`, `bike_brand`, `bike_model`, `engine_cc`, `location`, `price_primary.amount/period`
+- для `food_place`: `extracted_food.location.address`, `extracted_food.location.area.normalized`, `extracted_food.primary_cuisine`, `extracted_food.cuisine_tags[]`
+- для `visaran`: `extracted_visaran.direction_primary`, `extracted_visaran.price_primary.amount/currency`, `extracted_visaran.pickup_info`
+- для `job_vacancy`: `extracted_job.position_title`, `extracted_job.salary_primary.amount/currency/period`, `extracted_job.work_format`, `extracted_job.employment_type`, `extracted_job.location`
+- для `city_event`: `extracted_city_event.event_date_raw`, `extracted_city_event.event_time_raw`, `extracted_city_event.location`, `extracted_city_event.price_primary.amount/currency`, `extracted_city_event.ticket_required`
+- для `casino_poker`: `extracted_casino_poker.game_type`, `extracted_casino_poker.poker_format`, `extracted_casino_poker.buy_in_primary.amount/currency`, `extracted_casino_poker.blinds_raw`, `extracted_casino_poker.location`
+- для `excursions`: `extracted_excursions.tour_type`, `extracted_excursions.destinations[]`, `extracted_excursions.duration`, `extracted_excursions.departure_date_raw`, `extracted_excursions.departure_time_raw`, `extracted_excursions.price_primary.amount/currency`, `extracted_excursions.pickup_info`
 - для `currency_exchange`: `extracted_currency.vnd_rub|vnd_usd|vnd_usdt`
 
 Сортировки:

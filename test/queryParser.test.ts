@@ -32,6 +32,47 @@ describe("parseQuery", () => {
     expect(parsed.bikeFilters?.period).toBe("month");
   });
 
+  it("extracts filters for other structured categories", () => {
+    const food = parseQuery("кафе в центре italian");
+    expect(food.categories).toContain("food_place");
+    expect(food.foodFilters?.area).toBe("center");
+    expect(food.foodFilters?.cuisineTag).toBe("italian");
+
+    const visaran = parseQuery("визаран в лаос до 1200");
+    expect(visaran.categories).toContain("visaran");
+    expect(visaran.visaranFilters?.direction).toBe("laos");
+    expect(visaran.priceRange?.max).toBe(1200);
+
+    const job = parseQuery("вакансия remote full time");
+    expect(job.categories).toContain("job_vacancy");
+    expect(job.jobFilters?.workFormat).toBe("remote");
+    expect(job.jobFilters?.employmentType).toBe("full_time");
+
+    const city = parseQuery("событие бесплатно");
+    expect(city.categories).toContain("city_event");
+    expect(city.cityEventFilters?.ticketRequired).toBe(false);
+
+    const casino = parseQuery("покер cash");
+    expect(casino.categories).toContain("casino_poker");
+    expect(casino.casinoFilters?.gameType).toBe("poker");
+    expect(casino.casinoFilters?.pokerFormat).toBe("cash");
+
+    const excursion = parseQuery("экскурсия на острова");
+    expect(excursion.categories).toContain("excursions");
+    expect(excursion.excursionFilters?.tourType).toBe("islands");
+  });
+
+  it("maps 'где поесть' and european cuisine to food category", () => {
+    const whereToEat = parseQuery("где поесть");
+    expect(whereToEat.categories).toContain("food_place");
+    expect(whereToEat.categories).not.toContain("real_estate_rent");
+
+    const europeanCuisine = parseQuery("где европейская кухня");
+    expect(europeanCuisine.categories).toContain("food_place");
+    expect(europeanCuisine.categories).not.toContain("real_estate_rent");
+    expect(europeanCuisine.foodFilters?.primaryCuisine).toBe("european");
+  });
+
   it("detects multiple categories by hints", () => {
     const bike = parseQuery("нужен байк в аренду на неделю");
     expect(bike.categories).toContain("bike_rent");
