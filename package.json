@@ -1,0 +1,40 @@
+{
+  "name": "vnexpert",
+  "version": "1.0.0",
+  "description": "Telegram bot for MongoDB search + LLM fallback + daily digests",
+  "type": "module",
+  "main": "dist/index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:integration": "vitest run test/integration/searchAndAsk.integration.test.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "grammy": "^1.41.1",
+    "luxon": "^3.7.2",
+    "mongodb": "^6.17.0",
+    "openai": "^6.25.0",
+    "pino": "^10.3.1"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.7.1",
+    "@types/node": "^24.5.2",
+    "@typescript-eslint/eslint-plugin": "^8.21.0",
+    "@typescript-eslint/parser": "^8.21.0",
+    "eslint": "^9.18.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

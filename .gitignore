@@ -1,0 +1,33 @@
+node_modules/
+dist/
+coverage/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+
+# Logs and runtime artifacts
+*.log
+logs/
+bot.out.log
+bot.err.log
+
+# Build/cache/temp
+.cache/
+.tmp/
+tmp/
+temp/
+*.tmp
+*.tsbuildinfo
+
+# OS/IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
