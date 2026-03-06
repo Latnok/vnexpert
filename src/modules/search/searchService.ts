@@ -44,6 +44,37 @@ export function prioritizeByLocationMarker(results: SearchResult[], parsed: Pars
   return decorated.map((entry) => entry.item);
 }
 
+function isSuspiciousRealEstatePrice(item: SearchResult): boolean {
+  if (item.adCategory !== "real_estate_rent" || !item.realEstate || typeof item.realEstate !== "object") {
+    return false;
+  }
+  const src = item.realEstate as Record<string, unknown>;
+  const price = src.price_primary && typeof src.price_primary === "object" ? (src.price_primary as Record<string, unknown>) : undefined;
+  const expenses =
+    src.other_expenses && typeof src.other_expenses === "object" ? (src.other_expenses as Record<string, unknown>) : undefined;
+  const amount = typeof price?.amount === "number" ? price.amount : undefined;
+  const periodRaw = typeof price?.period === "string" ? price.period.toLowerCase() : "";
+  const management = typeof expenses?.management_fee_vnd_per_person === "number" ? expenses.management_fee_vnd_per_person : undefined;
+  if (amount === undefined) {
+    return false;
+  }
+  const isMonthly = periodRaw.includes("month") || periodRaw.includes("мес");
+  if (!isMonthly) {
+    return false;
+  }
+  if (management !== undefined && management === amount) {
+    return true;
+  }
+  return amount <= 1_000_000;
+}
+
+function filterSuspiciousRealEstatePrices(results: SearchResult[], parsed: ParsedQuery): SearchResult[] {
+  if (!(parsed.categories?.includes("real_estate_rent") ?? false)) {
+    return results;
+  }
+  return results.filter((item) => !isSuspiciousRealEstatePrice(item));
+}
+
 export class SearchService {
   constructor(private readonly messagesRepository: MessagesRepository) {}
 
@@ -76,7 +107,8 @@ export class SearchService {
       results = await this.searchWithinChatScope(parsed, undefined, widenedFrom, now.toJSDate(), isCurrencyQuery);
     }
 
-    return prioritizeByLocationMarker(results, parsed);
+    const cleaned = filterSuspiciousRealEstatePrices(results, parsed);
+    return prioritizeByLocationMarker(cleaned, parsed);
   }
 
   private async searchWithinChatScope(

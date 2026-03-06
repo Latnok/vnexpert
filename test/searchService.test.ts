@@ -76,3 +76,49 @@ describe("SearchService currency fallback window", () => {
     expect(secondWindowMs).toBeGreaterThan(firstWindowMs);
   });
 });
+
+describe("SearchService real-estate suspicious price cleanup", () => {
+  it("drops entries where monthly price equals management fee", async () => {
+    const repo = {
+      async searchMessages(): Promise<SearchResult[]> {
+        return [
+          {
+            messageId: 1,
+            chatId: 1,
+            date: new Date("2026-03-06T10:00:00.000Z"),
+            text: "bad",
+            adCategory: "real_estate_rent",
+            score: 1,
+            realEstate: {
+              price_primary: { amount: 700000, period: "month" },
+              other_expenses: { management_fee_vnd_per_person: 700000 },
+              location: { district: "north" }
+            }
+          },
+          {
+            messageId: 2,
+            chatId: 1,
+            date: new Date("2026-03-06T09:00:00.000Z"),
+            text: "good",
+            adCategory: "real_estate_rent",
+            score: 1,
+            realEstate: {
+              price_primary: { amount: 10000000, period: "month" },
+              location: { district: "north" }
+            }
+          }
+        ];
+      }
+    };
+
+    const service = new SearchService(repo as never);
+    const parsed: ParsedQuery = {
+      keywords: ["апарты"],
+      categories: ["real_estate_rent"],
+      locationMarker: "north",
+      needsClarification: false
+    };
+    const results = await service.search(parsed);
+    expect(results.map((r) => r.messageId)).toEqual([2]);
+  });
+});

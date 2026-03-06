@@ -4,6 +4,8 @@ type DedupeCandidate = {
   sender_id?: number | null;
   text?: string;
   media_links?: string[];
+  ad_category?: string;
+  extracted_real_estate?: unknown;
 };
 
 function normalizeText(value: string): string {
@@ -24,6 +26,32 @@ function getTextKey(candidate: DedupeCandidate): string | undefined {
   return textSignature ? `t:${textSignature}` : undefined;
 }
 
+function getRealEstateKey(candidate: DedupeCandidate): string | undefined {
+  if (candidate.ad_category !== "real_estate_rent") {
+    return undefined;
+  }
+  const re = candidate.extracted_real_estate;
+  if (!re || typeof re !== "object") {
+    return undefined;
+  }
+  const src = re as Record<string, unknown>;
+  const price = src.price_primary && typeof src.price_primary === "object" ? (src.price_primary as Record<string, unknown>) : undefined;
+  const location = src.location && typeof src.location === "object" ? (src.location as Record<string, unknown>) : undefined;
+  const contract =
+    src.contract_term && typeof src.contract_term === "object" ? (src.contract_term as Record<string, unknown>) : undefined;
+
+  const amount = typeof price?.amount === "number" ? price.amount : undefined;
+  const period = typeof price?.period === "string" ? price.period.toLowerCase().trim() : "";
+  const complex = typeof location?.complex === "string" ? location.complex.toLowerCase().trim() : "";
+  const district = typeof location?.district === "string" ? location.district.toLowerCase().trim() : "";
+  const minMonths = typeof contract?.min_months === "number" ? contract.min_months : undefined;
+  const maxMonths = typeof contract?.max_months === "number" ? contract.max_months : undefined;
+  if (amount === undefined && !complex && !district) {
+    return undefined;
+  }
+  return `re:${amount ?? "na"}:${period}:${district}:${complex}:${minMonths ?? "na"}:${maxMonths ?? "na"}`;
+}
+
 function getSenderKey(candidate: DedupeCandidate): string | undefined {
   if (candidate.sender_id !== null && candidate.sender_id !== undefined) {
     return `s:${candidate.sender_id}`;
@@ -38,6 +66,7 @@ function getUniqueFallbackKey(candidate: DedupeCandidate): string {
 export function dedupeCandidates<T extends DedupeCandidate>(candidates: T[]): T[] {
   const seenMedia = new Set<string>();
   const seenText = new Set<string>();
+  const seenRealEstate = new Set<string>();
   const seenSender = new Set<string>();
   const seenUnique = new Set<string>();
   const output: T[] = [];
@@ -50,6 +79,10 @@ export function dedupeCandidates<T extends DedupeCandidate>(candidates: T[]): T[
 
     const textKey = getTextKey(candidate);
     if (textKey && seenText.has(textKey)) {
+      continue;
+    }
+    const realEstateKey = getRealEstateKey(candidate);
+    if (realEstateKey && seenRealEstate.has(realEstateKey)) {
       continue;
     }
 
@@ -70,6 +103,9 @@ export function dedupeCandidates<T extends DedupeCandidate>(candidates: T[]): T[
     if (textKey) {
       seenText.add(textKey);
     }
+    if (realEstateKey) {
+      seenRealEstate.add(realEstateKey);
+    }
     if (!mediaKey && !textKey && senderKey) {
       seenSender.add(senderKey);
     }
@@ -79,4 +115,3 @@ export function dedupeCandidates<T extends DedupeCandidate>(candidates: T[]): T[
 
   return output;
 }
-

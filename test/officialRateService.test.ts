@@ -78,4 +78,16 @@ describe("CbrOfficialRateService", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
   });
+
+  it("returns null when remote API fails", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: false, text: async () => "" })) as unknown as typeof fetch;
+    vi.stubGlobal("fetch", fetchMock);
+
+    const service = new CbrOfficialRateService();
+    const rates = await service.getOfficialVndRates(["vnd_usd"]);
+    expect(rates).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    vi.unstubAllGlobals();
+  });
 });

@@ -54,4 +54,34 @@ describe("dedupeCandidates", () => {
     expect(output).toHaveLength(2);
     expect(output.map((x) => x.message_id)).toEqual([1, 3]);
   });
+
+  it("deduplicates real estate reposts by structured extracted fields", () => {
+    const input = [
+      {
+        chat_id: 1,
+        message_id: 101,
+        ad_category: "real_estate_rent",
+        text: "A",
+        extracted_real_estate: {
+          price_primary: { amount: 10000000, period: "month" },
+          location: { district: "north", complex: "oceanus" },
+          contract_term: { min_months: 6, max_months: 12 }
+        }
+      },
+      {
+        chat_id: 2,
+        message_id: 202,
+        ad_category: "real_estate_rent",
+        text: "B",
+        extracted_real_estate: {
+          price_primary: { amount: 10000000, period: "month" },
+          location: { district: "north", complex: "oceanus" },
+          contract_term: { min_months: 6, max_months: 12 }
+        }
+      }
+    ];
+    const output = dedupeCandidates(input);
+    expect(output).toHaveLength(1);
+    expect(output[0]?.message_id).toBe(101);
+  });
 });
