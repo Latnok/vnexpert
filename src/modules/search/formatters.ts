@@ -159,6 +159,14 @@ function buildRealEstateLine(item: SearchResult): string {
   return lines.join("\n");
 }
 
+function buildGenericLine(item: SearchResult): string {
+  const preview = stripEmojis(item.text.slice(0, 180));
+  const date = DateTime.fromJSDate(item.date).toFormat("dd.LL HH:mm");
+  const link = item.link ? `\n  ${item.link}` : "";
+  const lines = [`📝 ${preview}`, `📅 Дата публикации: ${date}${link}`, "────────────────────────"];
+  return lines.join("\n");
+}
+
 export function buildDbAnswer(
   query: string,
   results: SearchResult[],
@@ -168,14 +176,11 @@ export function buildDbAnswer(
   const limit = page?.limit ?? 5;
   const top = results.slice(offset, offset + limit);
   const hasMore = offset + top.length < results.length;
-  const lines = top.map((item, index) => {
+  const lines = top.map((item) => {
     if (item.adCategory === "real_estate_rent") {
       return buildRealEstateLine(item);
     }
-    const preview = stripEmojis(item.text.slice(0, 180));
-    const date = DateTime.fromJSDate(item.date).toFormat("dd.LL HH:mm");
-    const link = item.link ? `\n  ${item.link}` : "";
-    return `${offset + index + 1}. ${preview}\n  ${date}${link}`;
+    return buildGenericLine(item);
   });
   const pageSuffix = offset > 0 ? ` (с ${offset + 1})` : "";
   const footer = hasMore

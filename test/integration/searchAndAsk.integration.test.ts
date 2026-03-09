@@ -39,6 +39,7 @@ async function insertMessage(params: {
   date: Date;
   mediaLinks?: string[];
   extractedCurrency?: Record<string, unknown>;
+  extractedBike?: Record<string, unknown>;
 }): Promise<void> {
   await db.collection("messages").insertOne({
     source: "telegram",
@@ -54,7 +55,8 @@ async function insertMessage(params: {
     status: "active",
     media_links: params.mediaLinks ?? [],
     has_media: (params.mediaLinks?.length ?? 0) > 0,
-    extracted_currency: params.extractedCurrency
+    extracted_currency: params.extractedCurrency,
+    extracted_bike: params.extractedBike
   });
 }
 
@@ -92,7 +94,8 @@ describe("integration: search + ask", () => {
       text: "Аренда байка Honda Click",
       category: "bike_rent",
       date: now,
-      mediaLinks: ["https://t.me/c/1001/1"]
+      mediaLinks: ["https://t.me/c/1001/1"],
+      extractedBike: { is_bike_ad: true, deal_type: "rent" }
     });
     await insertMessage({
       chatId: 1001,
@@ -101,7 +104,8 @@ describe("integration: search + ask", () => {
       text: "Байк аренда недорого",
       category: "bike_rent",
       date: now,
-      mediaLinks: ["https://t.me/c/1001/1"]
+      mediaLinks: ["https://t.me/c/1001/1"],
+      extractedBike: { is_bike_ad: true, deal_type: "rent" }
     });
     await insertMessage({
       chatId: 1001,
@@ -110,10 +114,11 @@ describe("integration: search + ask", () => {
       text: "Аренда байка Yamaha на месяц",
       category: "bike_rent",
       date: now,
-      mediaLinks: ["https://t.me/c/1001/3"]
+      mediaLinks: ["https://t.me/c/1001/3"],
+      extractedBike: { is_bike_ad: true, deal_type: "rent" }
     });
 
-    const parsed = parseQuery("аренда байка");
+    const parsed = parseQuery("bike rent");
     const result = await searchService.search(parsed);
     expect(result).toHaveLength(2);
   });

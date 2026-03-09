@@ -15,6 +15,7 @@ import { SearchService } from "./modules/search/searchService.js";
 import { createBot } from "./bot/createBot.js";
 import { CbrOfficialRateService } from "./modules/currency/officialRateService.js";
 import { OfficialRatesRepository } from "./db/repositories/officialRatesRepository.js";
+import { OpenMeteoWeatherService } from "./modules/weather/weatherService.js";
 
 async function bootstrap(): Promise<void> {
   assertRequiredConfig();
@@ -30,8 +31,9 @@ async function bootstrap(): Promise<void> {
   const searchService = new SearchService(messagesRepository);
   const llmService = new OpenAiFallbackService();
   const officialRateService = new CbrOfficialRateService(officialRatesRepository);
+  const weatherService = new OpenMeteoWeatherService();
   const fallbackEventTracker = new MongoFallbackEventTracker(fallbackEventsRepository);
-  const askService = new AskService(searchService, llmService, fallbackEventTracker, officialRateService);
+  const askService = new AskService(searchService, llmService, fallbackEventTracker, officialRateService, weatherService);
   const digestService = new DigestService(messagesRepository);
 
   const bot = createBot({

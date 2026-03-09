@@ -118,6 +118,7 @@ export class SearchService {
     dateTo: Date,
     isCurrencyQuery: boolean
   ): Promise<SearchResult[]> {
+    const isBikeQuery = parsed.categories?.includes("bike_rent") ?? false;
     const primary = await this.messagesRepository.searchMessages({
       parsed,
       allowedChatIds: chatIds,
@@ -127,6 +128,65 @@ export class SearchService {
     });
     if (primary.length > 0) {
       return primary;
+    }
+
+    if (isBikeQuery) {
+      let relaxedBikeParsed: ParsedQuery = parsed;
+      if (parsed.keywords.length > 0) {
+        relaxedBikeParsed = {
+          ...parsed,
+          keywords: []
+        };
+        const relaxedByText = await this.messagesRepository.searchMessages({
+          parsed: relaxedBikeParsed,
+          allowedChatIds: chatIds,
+          dateFrom,
+          dateTo,
+          limit: 20
+        });
+        if (relaxedByText.length > 0) {
+          return relaxedByText;
+        }
+      }
+
+      if (relaxedBikeParsed.bikeFilters?.period) {
+        const bikeFiltersWithoutPeriod = { ...relaxedBikeParsed.bikeFilters };
+        delete bikeFiltersWithoutPeriod.period;
+        const relaxedWithoutPeriod: ParsedQuery = {
+          ...relaxedBikeParsed,
+          bikeFilters: bikeFiltersWithoutPeriod
+        };
+        const relaxedByPeriod = await this.messagesRepository.searchMessages({
+          parsed: relaxedWithoutPeriod,
+          allowedChatIds: chatIds,
+          dateFrom,
+          dateTo,
+          limit: 20
+        });
+        if (relaxedByPeriod.length > 0) {
+          return relaxedByPeriod;
+        }
+        relaxedBikeParsed = relaxedWithoutPeriod;
+      }
+
+      if (relaxedBikeParsed.bikeFilters?.dealType) {
+        const bikeFiltersWithoutDealType = { ...relaxedBikeParsed.bikeFilters };
+        delete bikeFiltersWithoutDealType.dealType;
+        const relaxedWithoutDealType: ParsedQuery = {
+          ...relaxedBikeParsed,
+          bikeFilters: bikeFiltersWithoutDealType
+        };
+        const relaxedByDealType = await this.messagesRepository.searchMessages({
+          parsed: relaxedWithoutDealType,
+          allowedChatIds: chatIds,
+          dateFrom,
+          dateTo,
+          limit: 20
+        });
+        if (relaxedByDealType.length > 0) {
+          return relaxedByDealType;
+        }
+      }
     }
 
     // Currency queries are often sparse in wording ("курс рубля"),

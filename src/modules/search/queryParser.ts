@@ -236,7 +236,7 @@ function extractDateRange(text: string): { from?: Date; to?: Date } {
 
 function extractBikeDealType(text: string): BikeDealType | undefined {
   const isRent = /(аренд|прокат|rent|for\s+rent|thu[eê])/i.test(text);
-  const isSale = /(продам|продаю|продажа|sale|sell|for\s+sale|b[aá]n|thanh\s+ly)/i.test(text);
+  const isSale = /(продам|продаю|продажа|куплю|покупк|buy|wtb|sale|sell|for\s+sale|b[aá]n|thanh\s+ly)/i.test(text);
   if (isRent && isSale) {
     return "mixed";
   }

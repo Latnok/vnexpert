@@ -54,6 +54,11 @@ describe("buildDbAnswer", () => {
     };
 
     const response = buildDbAnswer("байк", [result]);
+    expect(response.text).not.toContain("1. ");
+    expect(response.text).toContain("📝 Срочно нужен байк на месяц");
+    expect(response.text).not.toContain("Объявление:");
+    expect(response.text).toContain("📅 Дата публикации:");
+    expect(response.text).toContain("────────────────────────");
     expect(response.text).toContain("Срочно нужен байк на месяц");
     expect(response.text).toContain("Всего найдено 1 объявлений.");
     expect(response.text).not.toContain("🔥");

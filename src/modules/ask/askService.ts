@@ -7,16 +7,104 @@ import type { SearchService } from "../search/searchService.js";
 import type { OpenAiFallbackService } from "../llm/openAiFallbackService.js";
 import { NoopFallbackEventTracker, type FallbackEventTracker } from "./fallbackEventTracker.js";
 import { NoopOfficialRateService, type OfficialRateService } from "../currency/officialRateService.js";
+import { NoopWeatherService, type TodayWeatherForecast, type WeatherService } from "../weather/weatherService.js";
+
+function isWeatherQuestion(question: string): boolean {
+  return /(погод|прогноз|дожд|температур|weather)/i.test(question);
+}
+
+function isBeachCamQuestion(question: string): boolean {
+  const normalized = question.toLowerCase();
+  return (
+    normalized.includes("что на пляже") ||
+    normalized.includes("как на пляже") ||
+    normalized.includes("что на море") ||
+    normalized.includes("как на море")
+  );
+}
+
+function buildBeachCamsAnswer(): AskResponse {
+  return {
+    mode: "db_answer",
+    text: beachCamLines().join("\n"),
+    sources: []
+  };
+}
+
+function beachCamLines(): string[] {
+  return [
+    "Камеры по Нячангу (пляжи):",
+    "1) https://www.windfinder.com/webcams/nha_trang_khanh_hoa_vietnam",
+    "2) https://www.webcamtaxi.com/en/webcams/516-vietnam/khanh-hoa-province/2662-pham-van-dong-third-lane.html",
+    "3) https://en.youwebcams.org/location/nha-trang/",
+    "4) https://fr.worldcam.eu/liveview/36427"
+  ];
+}
+
+function weatherCodeLabel(code: number): string {
+  if (code === 0) {
+    return "ясно";
+  }
+  if (code === 1 || code === 2 || code === 3) {
+    return "переменная облачность";
+  }
+  if (code === 45 || code === 48) {
+    return "туман";
+  }
+  if ([51, 53, 55, 56, 57].includes(code)) {
+    return "морось";
+  }
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) {
+    return "дождь";
+  }
+  if ([71, 73, 75, 77, 85, 86].includes(code)) {
+    return "снег";
+  }
+  if ([95, 96, 99].includes(code)) {
+    return "гроза";
+  }
+  return "переменная погода";
+}
+
+function buildTodayWeatherAnswer(forecast: TodayWeatherForecast): AskResponse {
+  const min = Math.round(forecast.tempMinC);
+  const max = Math.round(forecast.tempMaxC);
+  const wind = Math.round(forecast.windSpeedMaxKmh);
+  return {
+    mode: "db_answer",
+    text: [
+      `☀️ Погода в Нячанге на сегодня (${forecast.date}):`,
+      "",
+      `Скорее всего ${weatherCodeLabel(forecast.weatherCode)}, ${min}..${max}°C, ветер: до ${wind} км/ч`,
+      "",
+      ...beachCamLines()
+    ].join("\n"),
+    sources: []
+  };
+}
 
 export class AskService {
   constructor(
     private readonly searchService: SearchService,
     private readonly llmFallbackService: OpenAiFallbackService,
     private readonly fallbackEventTracker: FallbackEventTracker = new NoopFallbackEventTracker(),
-    private readonly officialRateService: OfficialRateService = new NoopOfficialRateService()
+    private readonly officialRateService: OfficialRateService = new NoopOfficialRateService(),
+    private readonly weatherService: WeatherService = new NoopWeatherService()
   ) {}
 
   async handleQuestion(question: string, page?: { offset?: number; limit?: number }): Promise<AskResponse> {
+    if (isBeachCamQuestion(question)) {
+      return buildBeachCamsAnswer();
+    }
+
+    if (isWeatherQuestion(question)) {
+      const forecast = await this.weatherService.getTodayForecast();
+      if (!forecast) {
+        return buildClarification("Не удалось получить прогноз погоды. Попробуйте позже.");
+      }
+      return buildTodayWeatherAnswer(forecast);
+    }
+
     const parsed = parseQuery(question);
     if (parsed.needsClarification) {
       if (!config.llmFallbackEnabled || !config.llmFallbackOnParseFail) {

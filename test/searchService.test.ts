@@ -122,3 +122,122 @@ describe("SearchService real-estate suspicious price cleanup", () => {
     expect(results.map((r) => r.messageId)).toEqual([2]);
   });
 });
+
+describe("SearchService bike fallback", () => {
+  it("relaxes bike query by dropping keywords when strict search returns empty", async () => {
+    const calls: ParsedQuery[] = [];
+    const repo = {
+      async searchMessages(params: { parsed: ParsedQuery }): Promise<SearchResult[]> {
+        calls.push(params.parsed);
+        if (calls.length === 1) {
+          return [];
+        }
+        return [
+          {
+            messageId: 77,
+            chatId: 1,
+            date: new Date("2026-03-06T10:00:00.000Z"),
+            text: "bike ad",
+            adCategory: "bike_rent",
+            score: 1
+          }
+        ];
+      }
+    };
+
+    const service = new SearchService(repo as never);
+    const parsed: ParsedQuery = {
+      keywords: ["снять", "байк", "неделю"],
+      categories: ["bike_rent"],
+      bikeFilters: { period: "week", dealType: "rent" },
+      needsClarification: false
+    };
+    const results = await service.search(parsed);
+
+    expect(results.map((r) => r.messageId)).toEqual([77]);
+    expect(calls.length).toBe(2);
+    expect(calls[0]?.keywords).toEqual(["снять", "байк", "неделю"]);
+    expect(calls[1]?.keywords).toEqual([]);
+    expect(calls[1]?.bikeFilters?.period).toBe("week");
+  });
+
+  it("drops bike period when relaxed-by-text query still returns empty", async () => {
+    const calls: ParsedQuery[] = [];
+    const repo = {
+      async searchMessages(params: { parsed: ParsedQuery }): Promise<SearchResult[]> {
+        calls.push(params.parsed);
+        if (calls.length < 3) {
+          return [];
+        }
+        return [
+          {
+            messageId: 88,
+            chatId: 1,
+            date: new Date("2026-03-06T10:00:00.000Z"),
+            text: "bike ad without explicit period",
+            adCategory: "bike_rent",
+            score: 1
+          }
+        ];
+      }
+    };
+
+    const service = new SearchService(repo as never);
+    const parsed: ParsedQuery = {
+      keywords: ["байк", "неделя"],
+      categories: ["bike_rent"],
+      bikeFilters: { period: "week", dealType: "rent", brand: "honda" },
+      needsClarification: false
+    };
+    const results = await service.search(parsed);
+
+    expect(results.map((r) => r.messageId)).toEqual([88]);
+    expect(calls.length).toBe(3);
+    expect(calls[1]?.keywords).toEqual([]);
+    expect(calls[1]?.bikeFilters?.period).toBe("week");
+    expect(calls[2]?.keywords).toEqual([]);
+    expect(calls[2]?.bikeFilters?.period).toBeUndefined();
+    expect(calls[2]?.bikeFilters?.brand).toBe("honda");
+    expect(calls[2]?.bikeFilters?.dealType).toBe("rent");
+  });
+
+  it("drops bike dealType when query still returns empty after period relaxation", async () => {
+    const calls: ParsedQuery[] = [];
+    const repo = {
+      async searchMessages(params: { parsed: ParsedQuery }): Promise<SearchResult[]> {
+        calls.push(params.parsed);
+        if (calls.length < 4) {
+          return [];
+        }
+        return [
+          {
+            messageId: 99,
+            chatId: 1,
+            date: new Date("2026-03-06T10:00:00.000Z"),
+            text: "bike ad with unknown deal type",
+            adCategory: "bike_rent",
+            score: 1
+          }
+        ];
+      }
+    };
+
+    const service = new SearchService(repo as never);
+    const parsed: ParsedQuery = {
+      keywords: ["куплю", "байк"],
+      categories: ["bike_rent"],
+      bikeFilters: { dealType: "sale", period: "week", brand: "honda" },
+      needsClarification: false
+    };
+    const results = await service.search(parsed);
+
+    expect(results.map((r) => r.messageId)).toEqual([99]);
+    expect(calls.length).toBe(4);
+    expect(calls[0]?.bikeFilters?.dealType).toBe("sale");
+    expect(calls[1]?.keywords).toEqual([]);
+    expect(calls[2]?.bikeFilters?.period).toBeUndefined();
+    expect(calls[2]?.bikeFilters?.dealType).toBe("sale");
+    expect(calls[3]?.bikeFilters?.dealType).toBeUndefined();
+    expect(calls[3]?.bikeFilters?.brand).toBe("honda");
+  });
+});
