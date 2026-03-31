@@ -15,6 +15,20 @@ export const AD_CATEGORIES = [
 
 export type AdCategory = (typeof AD_CATEGORIES)[number];
 export const DIGEST_DEFAULT_CATEGORIES = AD_CATEGORIES.filter((cat) => cat !== "ignored");
+export const DIGEST_CATEGORY_LABELS: Record<AdCategory, string> = {
+  real_estate_rent: "Жилье",
+  bike_rent: "Байки",
+  food_place: "Еда",
+  job_vacancy: "Работа",
+  city_event: "События",
+  currency_exchange: "Обмен",
+  casino_poker: "Покер и казино",
+  visaran: "Визаран",
+  excursions: "Экскурсии",
+  other_services: "Услуги",
+  ignored: "Игнор",
+  other: "Другое"
+};
 
 export type CurrencyPair = "vnd_rub" | "vnd_usd" | "vnd_usdt";
 export type LocationMarker = "north" | "south" | "east" | "west" | "center" | "southwest";

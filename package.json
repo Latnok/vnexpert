@@ -13,7 +13,7 @@
     "start": "node dist/src/index.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --exclude test/integration/**",
     "test:integration": "vitest run test/integration/searchAndAsk.integration.test.ts"
   },
   "keywords": [],

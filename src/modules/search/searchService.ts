@@ -75,6 +75,54 @@ function filterSuspiciousRealEstatePrices(results: SearchResult[], parsed: Parse
   return results.filter((item) => !isSuspiciousRealEstatePrice(item));
 }
 
+function isFoodQuery(parsed: ParsedQuery): boolean {
+  return parsed.categories?.includes("food_place") ?? false;
+}
+
+function looksLikeRealEstateLeakForFood(item: SearchResult): boolean {
+  const text = item.text.toLowerCase();
+  const rentMarkers = [
+    "сдается",
+    "сдам",
+    "аренда",
+    "депозит",
+    "стоимость аренды",
+    "аренды",
+    "месяц",
+    "долгосрок"
+  ];
+  const propertyMarkers = [
+    "квартира",
+    "студия",
+    "апартамент",
+    "комната",
+    "спальн",
+    "сануз",
+    "жк",
+    "пентхаус"
+  ];
+  const leakSpecificMarkers = [
+    "кухня",
+    "кондиционер",
+    "полностью меблирован",
+    "электричество",
+    "вода по счетчикам",
+    "интернет 250.000",
+    "депозит = аренда"
+  ];
+  const hasRentMarker = rentMarkers.some((marker) => text.includes(marker));
+  const hasPropertyMarker = propertyMarkers.some((marker) => text.includes(marker));
+  const hasLeakSpecificMarker = leakSpecificMarkers.some((marker) => text.includes(marker));
+  return (hasRentMarker && hasPropertyMarker) || (hasPropertyMarker && hasLeakSpecificMarker);
+}
+
+function filterFoodLeaks(results: SearchResult[], parsed: ParsedQuery): SearchResult[] {
+  if (!isFoodQuery(parsed)) {
+    return results;
+  }
+  return results.filter((item) => !looksLikeRealEstateLeakForFood(item));
+}
+
 export class SearchService {
   constructor(private readonly messagesRepository: MessagesRepository) {}
 
@@ -107,7 +155,8 @@ export class SearchService {
       results = await this.searchWithinChatScope(parsed, undefined, widenedFrom, now.toJSDate(), isCurrencyQuery);
     }
 
-    const cleaned = filterSuspiciousRealEstatePrices(results, parsed);
+    const withoutFoodLeaks = filterFoodLeaks(results, parsed);
+    const cleaned = filterSuspiciousRealEstatePrices(withoutFoodLeaks, parsed);
     return prioritizeByLocationMarker(cleaned, parsed);
   }
 

@@ -34,10 +34,10 @@ function buildBeachCamsAnswer(): AskResponse {
 function beachCamLines(): string[] {
   return [
     "Камеры по Нячангу (пляжи):",
-    "1) https://www.windfinder.com/webcams/nha_trang_khanh_hoa_vietnam",
-    "2) https://www.webcamtaxi.com/en/webcams/516-vietnam/khanh-hoa-province/2662-pham-van-dong-third-lane.html",
-    "3) https://en.youwebcams.org/location/nha-trang/",
-    "4) https://fr.worldcam.eu/liveview/36427"
+    "1) https://worldcam.eu/liveview/36427",
+    "2) https://www.meteoblue.com/en/weather/webcams/nha-trang_vietnam_1572151",
+    "3) https://guideme24.com/products/e665-1",
+    "4) https://www.youtube.com/channel/UCgqmMYGNtMkNWmfUDz12j4Q"
   ];
 }
 
@@ -126,7 +126,8 @@ export class AskService {
     const results = await this.searchService.search(parsed);
     const isCurrencyQuery =
       (parsed.currencyPairs?.length ?? 0) > 0 || (parsed.categories?.includes("currency_exchange") ?? false);
-    const minRelevant = isCurrencyQuery ? 1 : config.llmFallbackMinRelevantResults;
+    const isFoodQuery = parsed.categories?.includes("food_place") ?? false;
+    const minRelevant = isCurrencyQuery || isFoodQuery ? 1 : config.llmFallbackMinRelevantResults;
     if (results.length >= minRelevant) {
       if (isCurrencyQuery) {
         const officialRates = await this.officialRateService.getOfficialVndRates(parsed.currencyPairs);

@@ -78,10 +78,14 @@ describe("integration: search + ask", () => {
   });
 
   afterAll(async () => {
-    await db.collection("messages").deleteMany({});
-    await db.collection("chat_catalog").deleteMany({});
-    await db.collection("llm_fallback_events").deleteMany({});
-    await client.close();
+    if (db) {
+      await db.collection("messages").deleteMany({});
+      await db.collection("chat_catalog").deleteMany({});
+      await db.collection("llm_fallback_events").deleteMany({});
+    }
+    if (client) {
+      await client.close();
+    }
   });
 
   it("deduplicates search results by media first", async () => {

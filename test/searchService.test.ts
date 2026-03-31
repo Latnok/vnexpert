@@ -241,3 +241,40 @@ describe("SearchService bike fallback", () => {
     expect(calls[3]?.bikeFilters?.brand).toBe("honda");
   });
 });
+
+describe("SearchService food leak cleanup", () => {
+  it("drops rent listings misclassified as food_place", async () => {
+    const repo = {
+      async searchMessages(): Promise<SearchResult[]> {
+        return [
+          {
+            messageId: 1,
+            chatId: 1,
+            date: new Date("2026-03-06T10:00:00.000Z"),
+            text: "Сдается студия, рестораны и кафе рядом, депозит за 1 месяц, кухня и кондиционер",
+            adCategory: "food_place",
+            score: 1
+          },
+          {
+            messageId: 2,
+            chatId: 1,
+            date: new Date("2026-03-06T09:00:00.000Z"),
+            text: "Кафе домашней кухни, сегодня в меню суп и шашлык",
+            adCategory: "food_place",
+            score: 1
+          }
+        ];
+      }
+    };
+
+    const service = new SearchService(repo as never);
+    const parsed: ParsedQuery = {
+      keywords: ["кафе"],
+      categories: ["food_place"],
+      needsClarification: false
+    };
+
+    const results = await service.search(parsed);
+    expect(results.map((r) => r.messageId)).toEqual([2]);
+  });
+});

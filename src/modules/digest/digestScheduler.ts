@@ -54,12 +54,15 @@ export class DigestScheduler {
       if (!isDueNow({ nowUtc: now, timezone: sub.timezone, timeLocal: sub.time_local, lastSentAt: sub.last_sent_at })) {
         continue;
       }
-      const { text } = await this.digestService.buildDigest({ categories: sub.categories });
+      const { text, sectionCount, itemCount } = await this.digestService.buildDigest({
+        categories: sub.categories,
+        timezone: sub.timezone,
+        now: now.toJSDate()
+      });
       const targetChatId = sub.chat_id ?? sub.user_id;
       await this.bot.api.sendMessage(targetChatId, text, { parse_mode: "Markdown" });
       await this.digestRepository.markSent(sub.user_id, now.toJSDate());
-      logger.info({ userId: sub.user_id }, "Digest sent");
+      logger.info({ userId: sub.user_id, sectionCount, itemCount, empty: itemCount === 0 }, "Digest sent");
     }
   }
 }
-

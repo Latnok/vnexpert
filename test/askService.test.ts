@@ -18,9 +18,9 @@ describe("AskService", () => {
 
     expect(result1.mode).toBe("db_answer");
     expect(result1.text).toContain("Камеры по Нячангу (пляжи):");
-    expect(result1.text).toContain("windfinder.com");
+    expect(result1.text).toContain("worldcam.eu");
     expect(result2.mode).toBe("db_answer");
-    expect(result2.text).toContain("webcamtaxi.com");
+    expect(result2.text).toContain("meteoblue.com");
     expect(searchService.search).not.toHaveBeenCalled();
     expect(llmService.answerWithSources).not.toHaveBeenCalled();
   });
@@ -51,7 +51,7 @@ describe("AskService", () => {
     expect(result.text).toContain("☀️ Погода в Нячанге на сегодня (2026-03-07):");
     expect(result.text).toContain("Скорее всего дождь, 24..31°C, ветер: до 18 км/ч");
     expect(result.text).toContain("Камеры по Нячангу (пляжи):");
-    expect(result.text).toContain("windfinder.com");
+    expect(result.text).toContain("worldcam.eu");
     expect(searchService.search).not.toHaveBeenCalled();
     expect(llmService.answerWithSources).not.toHaveBeenCalled();
   });
