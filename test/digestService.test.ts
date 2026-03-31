@@ -104,7 +104,7 @@ describe("DigestService", () => {
         return Array.from({ length: categories.length }, (_, idx) =>
           mkResult({
             id: idx + 1,
-            category: categories[idx],
+            category: categories[idx]!,
             text: `Объявление ${idx + 1} ` + "x".repeat(800),
             link: `https://t.me/c/1/${idx + 1}`
           })
