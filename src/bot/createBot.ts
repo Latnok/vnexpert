@@ -13,6 +13,14 @@ type SearchContinuationPayload = {
   limit: number;
 };
 
+export const COMMAND_SHORTCUTS = {
+  aparts: "где снять апарты",
+  weaver: "какая погода сегодня",
+  rub: "курс рубля",
+  usd: "курс usd",
+  bike: "нужен байк в аренду"
+} satisfies Record<string, string>;
+
 function parseCategories(raw: string): AdCategory[] {
   const values = raw
     .split(",")
@@ -65,6 +73,50 @@ async function replyWithoutLinkPreview(
   });
 }
 
+async function handleShortcutCommand(
+  ctx: { reply: (text: string, extra?: Record<string, unknown>) => Promise<unknown> },
+  askService: AskService,
+  query: string
+): Promise<void> {
+  const response = await askService.handleQuestion(query);
+  await replyWithoutLinkPreview(ctx, response.text);
+}
+
+export function buildStartMessage(): string {
+  return [
+    "Привет. Это vnexpert-бот для поиска объявлений и ежедневных обзоров.",
+    "",
+    "Что умеет:",
+    "1) Поиск по объявлениям по ключевым словам и фильтрам.",
+    "2) Ответы на общие вопросы о городе, визаране, курсах обмена и т.д.",
+    "3) Персональный ежедневный обзор по выбранным категориям в удобное время.",
+    "",
+    "Ограничения поиска:",
+    "- рекламные объявления: только за последние 7 дней;",
+    "- обмен: только за последние 24 часа.",
+    "",
+    "Команды:",
+    "/aparts - жилье",
+    "/weaver - погода",
+    "/rub - курс обмена рубля",
+    "/usd - курс обмена доллара",
+    "/bike - байки",
+    "/digest - включить ежедневный обзор",
+    "/categories - выбрать категории для обзора",
+    "/time - настроить время обзора (HH:mm)",
+    "/off - отключить обзор",
+    "",
+    "Примеры использования:",
+    "где снять апарты у моря менее 12 млн в месяц",
+    "нужен байк в аренду на месяц",
+    "какие события в городе сегодня",
+    "кто делает визаран",
+    "обмен usdt сегодня",
+    "вакансия для курьера",
+    "вопрос: близжайший пляж для купания"
+  ].join("\n");
+}
+
 export function createBot(params: {
   askService: AskService;
   botStateRepository: BotStateRepository;
@@ -77,36 +129,7 @@ export function createBot(params: {
   });
 
   bot.command("start", async (ctx) => {
-    await replyWithoutLinkPreview(
-      ctx,
-      [
-        "Привет. Это vnexpert-бот для поиска объявлений и ежедневных обзоров.",
-        "",
-        "Что умеет:",
-        "1) Поиск по объявлениям по ключевым словам и фильтрам.",
-        "2) Ответы на общие вопросы о городе, визаране, курсах обмена и т.д.",
-        "3) Персональный ежедневный обзор по выбранным категориям в удобное время.",
-        "",
-        "Ограничения поиска:",
-        "- рекламные объявления: только за последние 7 дней;",
-        "- обмен: только за последние 24 часа.",
-        "",
-        "Команды:",
-        "/digest - включить ежедневный обзор",
-        "/categories - выбрать категории для обзора",
-        "/time - настроить время обзора (HH:mm)",
-        "/off - отключить обзор",
-        "",
-        "Примеры использования:",
-        "где снять апарты у моря менее 12 млн в месяц",
-        "нужен байк в аренду на месяц",
-        "какие события в городе сегодня",
-        "кто делает визаран",
-        "обмен usdt сегодня",
-        "вакансия для курьера",
-        "вопрос: близжайший пляж для купания"
-      ].join("\n")
-    );
+    await replyWithoutLinkPreview(ctx, buildStartMessage());
   });
 
   bot.command("ask", async (ctx) => {
@@ -118,6 +141,12 @@ export function createBot(params: {
     const response = await params.askService.handleQuestion(text);
     await replyWithoutLinkPreview(ctx, response.text);
   });
+
+  for (const [command, query] of Object.entries(COMMAND_SHORTCUTS)) {
+    bot.command(command, async (ctx) => {
+      await handleShortcutCommand(ctx, params.askService, query);
+    });
+  }
 
   bot.command("digest", async (ctx) => {
     const userId = ctx.from?.id;
