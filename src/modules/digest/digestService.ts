@@ -6,17 +6,73 @@ import { DIGEST_CATEGORY_LABELS, type AdCategory, type SearchResult } from "../.
 const DIGEST_LOOKBACK_HOURS = 24;
 const DIGEST_LIMIT_PER_CATEGORY = 5;
 const PREVIEW_MAX_LEN = 120;
+const DIGEST_MAX_MESSAGE_LEN = 3500;
 
 function toCategoryLabel(category: string): string {
   return DIGEST_CATEGORY_LABELS[category as AdCategory] ?? category;
 }
 
+function sanitizeDigestText(text: string): string {
+  return String(text || "")
+    .normalize("NFC")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ")
+    .replace(/[\uD800-\uDFFF]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function compactPreview(text: string): string {
-  const normalized = text.replace(/\s+/g, " ").trim();
+  const normalized = sanitizeDigestText(text);
   if (normalized.length <= PREVIEW_MAX_LEN) {
     return normalized;
   }
-  return `${normalized.slice(0, PREVIEW_MAX_LEN - 1).trimEnd()}…`;
+  return `${normalized.slice(0, PREVIEW_MAX_LEN - 3).trimEnd()}...`;
+}
+
+function sanitizeLink(link: string | undefined): string {
+  return sanitizeDigestText(link ?? "");
+}
+
+function flushChunk(chunks: string[], lines: string[]): void {
+  const text = lines.join("\n").trim();
+  if (text) {
+    chunks.push(text);
+  }
+}
+
+function splitDigestMessages(headerLines: string[], sections: string[]): string[] {
+  const chunks: string[] = [];
+  let currentLines = [...headerLines];
+
+  for (const section of sections) {
+    const candidate = [...currentLines, "", section].join("\n");
+    if (candidate.length <= DIGEST_MAX_MESSAGE_LEN) {
+      currentLines = [...currentLines, "", section];
+      continue;
+    }
+
+    if (currentLines.length > headerLines.length) {
+      flushChunk(chunks, currentLines);
+      currentLines = [...headerLines, "", section];
+      continue;
+    }
+
+    const lines = section.split("\n");
+    let nestedLines = [...headerLines];
+    for (const line of lines) {
+      const nestedCandidate = [...nestedLines, "", line].join("\n");
+      if (nestedCandidate.length > DIGEST_MAX_MESSAGE_LEN && nestedLines.length > headerLines.length) {
+        flushChunk(chunks, nestedLines);
+        nestedLines = [...headerLines, "", line];
+      } else {
+        nestedLines = [...nestedLines, "", line];
+      }
+    }
+    currentLines = nestedLines;
+  }
+
+  flushChunk(chunks, currentLines);
+  return chunks;
 }
 
 export class DigestService {
@@ -26,7 +82,7 @@ export class DigestService {
     categories: string[];
     timezone?: string;
     now?: Date;
-  }): Promise<{ text: string; items: SearchResult[]; sectionCount: number; itemCount: number }> {
+  }): Promise<{ text: string; messages: string[]; items: SearchResult[]; sectionCount: number; itemCount: number }> {
     const timezone = params.timezone ?? config.defaultTimezone;
     const to = params.now ?? new Date();
     const toLocal = DateTime.fromJSDate(to).setZone(timezone);
@@ -42,8 +98,10 @@ export class DigestService {
     });
 
     if (items.length === 0) {
+      const emptyText = "За последние 24 часа по выбранным категориям новых сообщений нет.";
       return {
-        text: "За последние 24 часа по выбранным категориям новых сообщений нет.",
+        text: emptyText,
+        messages: [emptyText],
         items: [],
         sectionCount: 0,
         itemCount: 0
@@ -66,17 +124,24 @@ export class DigestService {
       if (!group || group.length === 0) {
         continue;
       }
+
       sectionCount += 1;
       const lines = group.slice(0, DIGEST_LIMIT_PER_CATEGORY).map((item, idx) => {
         const preview = compactPreview(item.text);
-        return `${idx + 1}. ${preview}${item.link ? `\n   ${item.link}` : ""}`;
+        const safeLink = sanitizeLink(item.link);
+        return `${idx + 1}. ${preview}${safeLink ? `\n   ${safeLink}` : ""}`;
       });
-      sections.push(`*${toCategoryLabel(category)}* (${group.length})\n${lines.join("\n")}`);
+
+      sections.push(`${toCategoryLabel(category)} (${group.length})\n${lines.join("\n")}`);
     }
 
     const period = `${fromLocal.toFormat("dd.MM HH:mm")} - ${toLocal.toFormat("dd.MM HH:mm")}`;
+    const headerLines = ["Ежедневный обзор за 24 часа", `${period} (${timezone})`];
+    const messages = splitDigestMessages(headerLines, sections);
+
     return {
-      text: [`Ежедневный обзор за 24 часа`, `${period} (${timezone})`, "", ...sections].join("\n"),
+      text: messages.join("\n\n"),
+      messages,
       items,
       sectionCount,
       itemCount: items.length

@@ -36,6 +36,7 @@ describe("DigestService", () => {
     });
 
     expect(result.text).toBe("За последние 24 часа по выбранным категориям новых сообщений нет.");
+    expect(result.messages).toEqual(["За последние 24 часа по выбранным категориям новых сообщений нет."]);
     expect(result.sectionCount).toBe(0);
     expect(result.itemCount).toBe(0);
   });
@@ -57,14 +58,15 @@ describe("DigestService", () => {
       now: new Date("2026-03-10T02:00:00.000Z")
     });
 
+    expect(result.messages).toHaveLength(1);
     expect(result.text).toContain("Ежедневный обзор за 24 часа");
     expect(result.text).toContain("09.03 09:00 - 10.03 09:00 (Asia/Bangkok)");
-    expect(result.text.indexOf("*Жилье*")).toBeLessThan(result.text.indexOf("*Работа*"));
-    expect(result.text).toContain("*Жилье* (1)");
-    expect(result.text).toContain("*Работа* (1)");
+    expect(result.text.indexOf("Жилье (1)")).toBeLessThan(result.text.indexOf("Работа (1)"));
+    expect(result.text).toContain("Жилье (1)");
+    expect(result.text).toContain("Работа (1)");
   });
 
-  it("keeps fresh deduped shortlist and truncates long previews", async () => {
+  it("keeps fresh shortlist and truncates long previews", async () => {
     const longText = "Очень длинное объявление ".repeat(10);
     const repo = {
       async digestMessages(): Promise<SearchResult[]> {
@@ -86,11 +88,38 @@ describe("DigestService", () => {
       now: new Date("2026-03-10T02:00:00.000Z")
     });
 
-    expect(result.text).toContain("*Байки* (6)");
+    expect(result.text).toContain("Байки (6)");
     expect(result.text).toContain("1. Очень длинное объявление");
-    expect(result.text).toContain("…");
+    expect(result.text).toContain("...");
     expect(result.text).not.toContain("6. Шестой байк");
     expect(result.itemCount).toBe(6);
     expect(result.sectionCount).toBe(1);
+  });
+
+  it("splits oversized digest into multiple telegram-safe messages", async () => {
+    const categories = Array.from({ length: 40 }, (_, idx) => `category_${idx + 1}`);
+
+    const repo = {
+      async digestMessages(): Promise<SearchResult[]> {
+        return Array.from({ length: categories.length }, (_, idx) =>
+          mkResult({
+            id: idx + 1,
+            category: categories[idx],
+            text: `Объявление ${idx + 1} ` + "x".repeat(800),
+            link: `https://t.me/c/1/${idx + 1}`
+          })
+        );
+      }
+    };
+
+    const service = new DigestService(repo as never);
+    const result = await service.buildDigest({
+      categories: [...categories],
+      timezone: "Asia/Bangkok",
+      now: new Date("2026-03-10T02:00:00.000Z")
+    });
+
+    expect(result.messages.length).toBeGreaterThan(1);
+    expect(result.messages.every((message) => message.length <= 3500)).toBe(true);
   });
 });
