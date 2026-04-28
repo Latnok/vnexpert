@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DigestService } from "../src/modules/digest/digestService.js";
 import type { SearchResult } from "../src/types/domain.js";
 
@@ -121,5 +121,51 @@ describe("DigestService", () => {
 
     expect(result.messages.length).toBeGreaterThan(1);
     expect(result.messages.every((message) => message.length <= 3500)).toBe(true);
+  });
+
+  it("passes digest filters and adds weather and official rub rate", async () => {
+    const digestMessages = vi.fn(async (): Promise<SearchResult[]> => [
+      mkResult({ id: 1, category: "real_estate_rent", text: "Студия на юге", link: "https://t.me/c/1/1" })
+    ]);
+    const repo = { digestMessages };
+    const weatherService = {
+      async getTodayForecast() {
+        return {
+          date: "2026-03-10",
+          weatherCode: 61,
+          tempMinC: 24,
+          tempMaxC: 30,
+          precipitationProbabilityMax: 70,
+          windSpeedMaxKmh: 18
+        };
+      }
+    };
+    const officialRateService = {
+      async getOfficialVndRates() {
+        return {
+          source: "cbr" as const,
+          date: "10.03.2026",
+          rates: { vnd_rub: 310.25 }
+        };
+      }
+    };
+
+    const service = new DigestService(repo as never, weatherService, officialRateService);
+    const filters = { realEstate: { locationMarker: "south" as const, maxPriceVnd: 12_000_000 } };
+    const result = await service.buildDigest({
+      categories: ["real_estate_rent"],
+      filters,
+      timezone: "Asia/Bangkok",
+      now: new Date("2026-03-10T02:00:00.000Z")
+    });
+
+    expect(digestMessages).toHaveBeenCalledWith(
+      expect.objectContaining({
+        categories: ["real_estate_rent"],
+        filters
+      })
+    );
+    expect(result.text).toContain("Погода: дождь, 24-30 C, дождь до 70%, ветер до 18 км/ч");
+    expect(result.text).toContain("Курс ЦБ: 1 RUB = 310,25 VND (10.03.2026)");
   });
 });

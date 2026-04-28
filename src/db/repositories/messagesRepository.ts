@@ -1,7 +1,7 @@
 import type { Collection, Db, Filter, FindOptions, Sort } from "mongodb";
 import { buildSearchFilter } from "../../modules/search/buildSearchFilter.js";
 import { dedupeCandidates } from "../../modules/search/dedupe.js";
-import type { MessageDoc, ParsedQuery, SearchResult } from "../../types/domain.js";
+import type { DigestFilters, MessageDoc, ParsedQuery, SearchResult } from "../../types/domain.js";
 import { buildTelegramMessageLink } from "../../lib/messageLinks.js";
 
 function extractRubRateFromDoc(doc: MessageDoc): number | undefined {
@@ -89,6 +89,7 @@ export class MessagesRepository {
   async digestMessages(params: {
     allowedChatIds?: number[];
     categories: string[];
+    filters?: DigestFilters;
     from: Date;
     to: Date;
     limitPerCategory: number;
@@ -100,6 +101,35 @@ export class MessagesRepository {
     };
     if (params.allowedChatIds && params.allowedChatIds.length > 0) {
       filter.chat_id = { $in: params.allowedChatIds };
+    }
+    const realEstateClauses: Filter<MessageDoc>[] = [];
+    const realEstateFilters = params.filters?.realEstate;
+    if (realEstateFilters?.locationMarker) {
+      const locationPattern = `^${realEstateFilters.locationMarker}$`;
+      realEstateClauses.push({
+        $or: [
+          { "extracted_real_estate.location.normalized": { $regex: locationPattern, $options: "i" } },
+          { "extracted_real_estate.location.district": { $regex: locationPattern, $options: "i" } }
+        ]
+      } as Filter<MessageDoc>);
+    }
+    if (realEstateFilters?.maxPriceVnd !== undefined) {
+      realEstateClauses.push({
+        "extracted_real_estate.price_primary.amount": { $lte: realEstateFilters.maxPriceVnd }
+      } as Filter<MessageDoc>);
+    }
+    if (realEstateClauses.length > 0) {
+      filter.$and = [
+        {
+          $or: [
+            { ad_category: { $ne: "real_estate_rent" } },
+            {
+              ad_category: "real_estate_rent",
+              $and: realEstateClauses
+            } as Filter<MessageDoc>
+          ]
+        } as Filter<MessageDoc>
+      ];
     }
 
     const docs = await this.collection

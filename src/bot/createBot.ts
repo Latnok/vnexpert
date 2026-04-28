@@ -5,13 +5,44 @@ import { logger } from "../lib/logger.js";
 import type { AskService } from "../modules/ask/askService.js";
 import type { BotStateRepository } from "../db/repositories/botStateRepository.js";
 import type { UserDigestRepository } from "../db/repositories/userDigestRepository.js";
-import { AD_CATEGORIES, DIGEST_DEFAULT_CATEGORIES, type AdCategory } from "../types/domain.js";
+import {
+  AD_CATEGORIES,
+  DIGEST_CATEGORY_LABELS,
+  DIGEST_DEFAULT_CATEGORIES,
+  type AdCategory,
+  type DigestFilters,
+  type LocationMarker
+} from "../types/domain.js";
 
 type SearchContinuationPayload = {
   query: string;
   offset: number;
   limit: number;
 };
+
+const CATEGORY_ALIASES: Record<AdCategory, string[]> = {
+  real_estate_rent: ["недвижимость", "жилье", "жильё", "апарты", "квартиры", "real_estate_rent"],
+  bike_rent: ["байки", "байк", "скутеры", "bike_rent"],
+  food_place: ["еда", "кафе", "рестораны", "food_place"],
+  job_vacancy: ["работа", "вакансии", "job_vacancy"],
+  city_event: ["события", "ивенты", "мероприятия", "city_event"],
+  currency_exchange: ["обмен", "валюта", "курс", "currency_exchange"],
+  casino_poker: ["покер", "казино", "casino_poker"],
+  visaran: ["визаран", "визы", "visaran"],
+  excursions: ["экскурсии", "туры", "excursions"],
+  other_services: ["услуги", "сервисы", "other_services"],
+  ignored: ["ignored"],
+  other: ["другое", "прочее", "other"]
+};
+
+const LOCATION_ALIASES: Array<{ marker: LocationMarker; hints: string[] }> = [
+  { marker: "north", hints: ["север", "севере", "северный", "north"] },
+  { marker: "south", hints: ["юг", "юге", "южный", "south"] },
+  { marker: "east", hints: ["восток", "востоке", "east"] },
+  { marker: "west", hints: ["запад", "западе", "west"] },
+  { marker: "center", hints: ["центр", "центре", "center", "central"] },
+  { marker: "southwest", hints: ["юго-запад", "югозапад", "southwest"] }
+];
 
 export const COMMAND_SHORTCUTS = {
   aparts: "где снять апарты",
@@ -22,12 +53,24 @@ export const COMMAND_SHORTCUTS = {
 } satisfies Record<string, string>;
 
 function parseCategories(raw: string): AdCategory[] {
-  const values = raw
+  const normalized = raw.toLowerCase();
+  const explicitValues = normalized
     .split(",")
     .map((v) => v.trim())
     .filter(Boolean);
-  const unique = Array.from(new Set(values));
-  return unique.filter((v): v is AdCategory => AD_CATEGORIES.includes(v as AdCategory));
+  const categories: AdCategory[] = [];
+  for (const value of explicitValues.length ? explicitValues : [normalized]) {
+    for (const category of AD_CATEGORIES) {
+      if (categories.includes(category)) {
+        continue;
+      }
+      const aliases = CATEGORY_ALIASES[category];
+      if (value === category || aliases.some((alias) => value.includes(alias))) {
+        categories.push(category);
+      }
+    }
+  }
+  return categories.filter((category) => category !== "ignored");
 }
 
 function isValidTime(raw: string): boolean {
@@ -62,6 +105,69 @@ function parseContinuationPayload(payload: Record<string, unknown> | null | unde
     offset,
     limit
   };
+}
+
+function parsePriceNumber(rawNumber?: string, rawUnit?: string): number | undefined {
+  if (!rawNumber) {
+    return undefined;
+  }
+  const base = Number(rawNumber.replace(",", "."));
+  if (!Number.isFinite(base)) {
+    return undefined;
+  }
+  const unit = (rawUnit ?? "").toLowerCase();
+  if (unit === "млн" || unit === "миллион" || unit === "м") {
+    return Math.round(base * 1_000_000);
+  }
+  if (unit === "тыс" || unit === "к") {
+    return Math.round(base * 1_000);
+  }
+  return Math.round(base);
+}
+
+function parseDigestFilters(raw: string): DigestFilters {
+  const text = raw.trim().toLowerCase();
+  const filters: DigestFilters = {};
+  const location = LOCATION_ALIASES.find((entry) => entry.hints.some((hint) => text.includes(hint)))?.marker;
+  const priceMatch = text.match(/(?:до|макс(?:имум)?|не\s*дороже|дешевле|менее)\s*(\d+(?:[.,]\d+)?)\s*(млн|миллион|м|тыс|к)?/i);
+  const maxPriceVnd = parsePriceNumber(priceMatch?.[1], priceMatch?.[2]);
+  if (location || maxPriceVnd !== undefined) {
+    filters.realEstate = {
+      locationMarker: location,
+      maxPriceVnd
+    };
+  }
+  return filters;
+}
+
+function formatPrice(value: number): string {
+  return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(value);
+}
+
+function formatDigestFilters(filters: DigestFilters | undefined): string {
+  const realEstate = filters?.realEstate;
+  if (!realEstate?.locationMarker && realEstate?.maxPriceVnd === undefined) {
+    return "Фильтры недвижимости не заданы.";
+  }
+  const parts: string[] = [];
+  if (realEstate.locationMarker) {
+    parts.push(`район: ${realEstate.locationMarker}`);
+  }
+  if (realEstate.maxPriceVnd !== undefined) {
+    parts.push(`цена до ${formatPrice(realEstate.maxPriceVnd)} VND`);
+  }
+  return `Фильтры недвижимости: ${parts.join(", ")}.`;
+}
+
+function buildCategoriesMessage(): string {
+  return [
+    "Выберите темы для ежедневного обзора.",
+    "",
+    ...DIGEST_DEFAULT_CATEGORIES.map((category) => `${category} - ${DIGEST_CATEGORY_LABELS[category]}`),
+    "",
+    "Можно отправить внутренние имена или обычные слова через запятую.",
+    "Например: недвижимость, байки, еда, работа, события, обмен"
+  ].join("\n");
 }
 
 async function replyWithoutLinkPreview(
@@ -102,7 +208,9 @@ export function buildStartMessage(): string {
     "/usd - курс обмена доллара",
     "/bike - байки",
     "/digest - включить ежедневный обзор",
-    "/categories - выбрать категории для обзора",
+    "/topics - выбрать темы обзора",
+    "/categories - выбрать темы обзора",
+    "/filters - фильтры недвижимости для обзора",
     "/time - настроить время обзора (HH:mm)",
     "/off - отключить обзор",
     "",
@@ -167,21 +275,28 @@ export function createBot(params: {
       timezone
     });
     await params.botStateRepository.set(userId, "idle");
-    await replyWithoutLinkPreview(
-      ctx,
-      `Ежедневный обзор включен. Категории: ${categories.join(", ")}. Время: ${timeLocal} (${timezone}).`
-    );
+    await replyWithoutLinkPreview(ctx, `Ежедневный обзор включен. Темы: ${categories.join(", ")}. Время: ${timeLocal} (${timezone}).`);
   });
 
-  bot.command("categories", async (ctx) => {
+  bot.command(["categories", "topics"], async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) {
       return;
     }
     await params.botStateRepository.set(userId, "awaiting_categories");
+    await replyWithoutLinkPreview(ctx, buildCategoriesMessage());
+  });
+
+  bot.command("filters", async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) {
+      return;
+    }
+    const sub = await params.userDigestRepository.getByUserId(userId);
+    await params.botStateRepository.set(userId, "awaiting_digest_filters");
     await replyWithoutLinkPreview(
       ctx,
-      `Доступные категории:\n${AD_CATEGORIES.join("\n")}\n\nОтправьте список через запятую, например:\nreal_estate_rent,job_vacancy`
+      `${formatDigestFilters(sub?.filters)}\nОтправьте фильтр недвижимости, например: юг до 12 млн`
     );
   });
 
@@ -227,7 +342,23 @@ export function createBot(params: {
       }
       await params.userDigestRepository.updateCategories(userId, categories);
       await params.botStateRepository.set(userId, "idle");
-      await replyWithoutLinkPreview(ctx, `Категории обновлены: ${categories.join(", ")}`);
+      await replyWithoutLinkPreview(ctx, `Темы обновлены: ${categories.join(", ")}`);
+      return;
+    }
+    if (state?.mode === "awaiting_digest_filters") {
+      const filters = parseDigestFilters(text);
+      if (!filters.realEstate) {
+        await replyWithoutLinkPreview(ctx, "Не удалось распознать фильтр. Пример: юг до 12 млн");
+        return;
+      }
+      const sub = await params.userDigestRepository.getByUserId(userId);
+      if (!sub) {
+        await replyWithoutLinkPreview(ctx, "Сначала включите обзор командой /digest.");
+        return;
+      }
+      await params.userDigestRepository.updateFilters(userId, filters);
+      await params.botStateRepository.set(userId, "idle");
+      await replyWithoutLinkPreview(ctx, formatDigestFilters(filters));
       return;
     }
     if (state?.mode === "awaiting_time") {

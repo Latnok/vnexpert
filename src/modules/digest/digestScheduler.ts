@@ -56,6 +56,7 @@ export class DigestScheduler {
       }
       const { messages, sectionCount, itemCount } = await this.digestService.buildDigest({
         categories: sub.categories,
+        filters: sub.filters,
         timezone: sub.timezone,
         now: now.toJSDate()
       });

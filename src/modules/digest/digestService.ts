@@ -1,7 +1,16 @@
 import { DateTime } from "luxon";
 import { config } from "../../config.js";
 import type { MessagesRepository } from "../../db/repositories/messagesRepository.js";
-import { DIGEST_CATEGORY_LABELS, type AdCategory, type SearchResult } from "../../types/domain.js";
+import {
+  DIGEST_CATEGORY_LABELS,
+  type AdCategory,
+  type CurrencyPair,
+  type DigestFilters,
+  type SearchResult
+} from "../../types/domain.js";
+import { logger } from "../../lib/logger.js";
+import { NoopOfficialRateService, type OfficialRateService, type OfficialVndRates } from "../currency/officialRateService.js";
+import { NoopWeatherService, type TodayWeatherForecast, type WeatherService } from "../weather/weatherService.js";
 
 const DIGEST_LOOKBACK_HOURS = 24;
 const DIGEST_LIMIT_PER_CATEGORY = 5;
@@ -75,11 +84,75 @@ function splitDigestMessages(headerLines: string[], sections: string[]): string[
   return chunks;
 }
 
+function describeWeatherCode(code: number): string {
+  if (code === 0) {
+    return "ясно";
+  }
+  if ([1, 2, 3].includes(code)) {
+    return "переменная облачность";
+  }
+  if ([45, 48].includes(code)) {
+    return "туман";
+  }
+  if ([51, 53, 55, 56, 57].includes(code)) {
+    return "морось";
+  }
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) {
+    return "дождь";
+  }
+  if ([95, 96, 99].includes(code)) {
+    return "гроза";
+  }
+  return "прогноз";
+}
+
+function formatNumber(value: number, digits = 0): string {
+  return new Intl.NumberFormat("ru-RU", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits
+  }).format(value);
+}
+
+function buildInfoSection(params: {
+  weather: TodayWeatherForecast | null;
+  rates: OfficialVndRates | null;
+}): string[] {
+  const lines: string[] = [];
+  if (params.weather) {
+    lines.push(
+      `Погода: ${describeWeatherCode(params.weather.weatherCode)}, ${formatNumber(params.weather.tempMinC)}-${formatNumber(
+        params.weather.tempMaxC
+      )} C, дождь до ${formatNumber(params.weather.precipitationProbabilityMax)}%, ветер до ${formatNumber(
+        params.weather.windSpeedMaxKmh
+      )} км/ч`
+    );
+  }
+  const rubRate = params.rates?.rates.vnd_rub;
+  if (typeof rubRate === "number" && Number.isFinite(rubRate)) {
+    lines.push(`Курс ЦБ: 1 RUB = ${formatNumber(rubRate, 2)} VND (${params.rates?.date ?? "сегодня"})`);
+  }
+  return lines;
+}
+
+async function safeDigestInfo<T>(promise: Promise<T>, message: string): Promise<T | null> {
+  try {
+    return await promise;
+  } catch (error) {
+    logger.warn({ error }, message);
+    return null;
+  }
+}
+
 export class DigestService {
-  constructor(private readonly messagesRepository: MessagesRepository) {}
+  constructor(
+    private readonly messagesRepository: MessagesRepository,
+    private readonly weatherService: WeatherService = new NoopWeatherService(),
+    private readonly officialRateService: OfficialRateService = new NoopOfficialRateService()
+  ) {}
 
   async buildDigest(params: {
     categories: string[];
+    filters?: DigestFilters;
     timezone?: string;
     now?: Date;
   }): Promise<{ text: string; messages: string[]; items: SearchResult[]; sectionCount: number; itemCount: number }> {
@@ -92,13 +165,21 @@ export class DigestService {
     const items = await this.messagesRepository.digestMessages({
       allowedChatIds: undefined,
       categories: params.categories,
+      filters: params.filters,
       from,
       to,
       limitPerCategory: DIGEST_LIMIT_PER_CATEGORY
     });
+    const [weather, rates] = await Promise.all([
+      safeDigestInfo(this.weatherService.getTodayForecast(), "Failed to fetch digest weather"),
+      safeDigestInfo(this.officialRateService.getOfficialVndRates(["vnd_rub" as CurrencyPair]), "Failed to fetch digest rates")
+    ]);
+    const infoLines = buildInfoSection({ weather, rates });
 
     if (items.length === 0) {
-      const emptyText = "За последние 24 часа по выбранным категориям новых сообщений нет.";
+      const emptyText = [...infoLines, "За последние 24 часа по выбранным категориям новых сообщений нет."]
+        .filter(Boolean)
+        .join("\n");
       return {
         text: emptyText,
         messages: [emptyText],
@@ -136,7 +217,7 @@ export class DigestService {
     }
 
     const period = `${fromLocal.toFormat("dd.MM HH:mm")} - ${toLocal.toFormat("dd.MM HH:mm")}`;
-    const headerLines = ["Ежедневный обзор за 24 часа", `${period} (${timezone})`];
+    const headerLines = ["Ежедневный обзор за 24 часа", `${period} (${timezone})`, ...infoLines];
     const messages = splitDigestMessages(headerLines, sections);
 
     return {

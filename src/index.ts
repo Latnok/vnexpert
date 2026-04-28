@@ -34,7 +34,7 @@ async function bootstrap(): Promise<void> {
   const weatherService = new OpenMeteoWeatherService();
   const fallbackEventTracker = new MongoFallbackEventTracker(fallbackEventsRepository);
   const askService = new AskService(searchService, llmService, fallbackEventTracker, officialRateService, weatherService);
-  const digestService = new DigestService(messagesRepository);
+  const digestService = new DigestService(messagesRepository, weatherService, officialRateService);
 
   const bot = createBot({
     askService,

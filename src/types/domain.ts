@@ -33,7 +33,19 @@ export const DIGEST_CATEGORY_LABELS: Record<AdCategory, string> = {
 export type CurrencyPair = "vnd_rub" | "vnd_usd" | "vnd_usdt";
 export type LocationMarker = "north" | "south" | "east" | "west" | "center" | "southwest";
 export type BikeDealType = "rent" | "sale" | "mixed" | "unknown";
-export type BotStateMode = "idle" | "awaiting_categories" | "awaiting_time" | "awaiting_clarification";
+export type BotStateMode =
+  | "idle"
+  | "awaiting_categories"
+  | "awaiting_time"
+  | "awaiting_digest_filters"
+  | "awaiting_clarification";
+
+export type DigestFilters = {
+  realEstate?: {
+    locationMarker?: LocationMarker;
+    maxPriceVnd?: number;
+  };
+};
 
 export type ParsedQuery = {
   keywords: string[];
@@ -151,6 +163,7 @@ export type UserDigestSubscriptionDoc = {
   chat_id: number | null;
   enabled: boolean;
   categories: AdCategory[];
+  filters?: DigestFilters;
   time_local: string;
   timezone: string;
   last_sent_at: Date | null;

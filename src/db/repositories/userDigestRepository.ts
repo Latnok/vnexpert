@@ -1,5 +1,5 @@
 import type { Collection, Db } from "mongodb";
-import type { AdCategory, UserDigestSubscriptionDoc } from "../../types/domain.js";
+import type { AdCategory, DigestFilters, UserDigestSubscriptionDoc } from "../../types/domain.js";
 
 export class UserDigestRepository {
   private readonly collection: Collection<UserDigestSubscriptionDoc>;
@@ -70,6 +70,18 @@ export class UserDigestRepository {
     );
   }
 
+  async updateFilters(userId: number, filters: DigestFilters): Promise<void> {
+    await this.collection.updateOne(
+      { user_id: userId },
+      {
+        $set: {
+          filters,
+          updated_at: new Date()
+        }
+      }
+    );
+  }
+
   async disable(userId: number): Promise<void> {
     await this.collection.updateOne(
       { user_id: userId },
@@ -98,4 +110,3 @@ export class UserDigestRepository {
     );
   }
 }
-
