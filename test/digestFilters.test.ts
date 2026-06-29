@@ -27,7 +27,7 @@ describe("digest filters", () => {
       limitPerCategory: 5
     });
 
-    const filter = find.mock.calls[0]?.[0];
+    const filter = find.mock.calls[0]?.[0] as { $and?: unknown[] };
     expect(filter).toMatchObject({
       status: { $in: ["active", "edited"] },
       ad_category: { $in: ["real_estate_rent", "job_vacancy"] },
