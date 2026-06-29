@@ -72,7 +72,7 @@ describe("digest filters", () => {
       limitPerCategory: 5
     });
 
-    const filter = find.mock.calls[0]?.[0];
+    const filter = find.mock.calls[0]?.[0] as { $and?: unknown[] };
     expect(filter.$and).toEqual(
       expect.arrayContaining([
         {
