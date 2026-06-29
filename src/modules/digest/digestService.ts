@@ -42,6 +42,123 @@ function sanitizeLink(link: string | undefined): string {
   return sanitizeDigestText(link ?? "");
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined;
+}
+
+function cleanValue(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const clean = sanitizeDigestText(value);
+  return clean || undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function nestedRecord(source: Record<string, unknown> | undefined, key: string): Record<string, unknown> | undefined {
+  return asRecord(source?.[key]);
+}
+
+function formatMoney(amount: unknown, currency: unknown, period?: unknown): string | undefined {
+  if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
+    return undefined;
+  }
+  const parts = [
+    formatNumber(amount),
+    typeof currency === "string" && currency.trim() ? currency.trim() : "VND",
+    typeof period === "string" && period.trim() ? period.trim() : undefined
+  ].filter(Boolean);
+  return parts.join(" ");
+}
+
+function formatPricePrimary(source: Record<string, unknown> | undefined): string | undefined {
+  const price = nestedRecord(source, "price_primary");
+  return formatMoney(price?.amount, price?.currency, price?.period);
+}
+
+function formatLocation(source: Record<string, unknown> | undefined): string | undefined {
+  const location = nestedRecord(source, "location");
+  return (
+    cleanValue(location?.district) ??
+    cleanValue(location?.normalized) ??
+    cleanValue(location?.raw) ??
+    cleanValue(source?.district) ??
+    cleanValue(source?.area)
+  );
+}
+
+function formatComplex(source: Record<string, unknown> | undefined): string | undefined {
+  const location = nestedRecord(source, "location");
+  return cleanValue(location?.complex) ?? cleanValue(source?.complex) ?? cleanValue(source?.residential_complex);
+}
+
+function formatRate(item: SearchResult): string | undefined {
+  const rates: string[] = [];
+  if (typeof item.rubRateVnd === "number" && Number.isFinite(item.rubRateVnd)) {
+    rates.push(`1 RUB = ${formatNumber(item.rubRateVnd, 2)} VND`);
+  }
+  if (typeof item.usdRateVnd === "number" && Number.isFinite(item.usdRateVnd)) {
+    rates.push(`1 USD = ${formatNumber(item.usdRateVnd, 0)} VND`);
+  }
+  if (typeof item.usdtRateVnd === "number" && Number.isFinite(item.usdtRateVnd)) {
+    rates.push(`1 USDT = ${formatNumber(item.usdtRateVnd, 0)} VND`);
+  }
+  return rates.length ? rates.join("; ") : undefined;
+}
+
+function buildStructuredDigestLine(item: SearchResult, idx: number): string {
+  const fields: string[] = [];
+  if (item.adCategory === "real_estate_rent") {
+    const realEstate = item.realEstate;
+    const price = formatPricePrimary(realEstate);
+    const location = formatLocation(realEstate);
+    const complex = formatComplex(realEstate);
+    if (price) {
+      fields.push(`Цена: ${price}`);
+    }
+    if (location) {
+      fields.push(`Район: ${location}`);
+    }
+    if (complex) {
+      fields.push(`ЖК: ${complex}`);
+    }
+  } else if (item.adCategory === "bike_rent") {
+    const bike = item.bike;
+    const price = formatPricePrimary(bike);
+    const brand = cleanValue(bike?.bike_brand);
+    const model = cleanValue(bike?.bike_model);
+    const yearValue = numberValue(bike?.year);
+    const mileageValue = numberValue(bike?.mileage_km);
+    const engineValue = numberValue(bike?.engine_cc);
+    const year = yearValue !== undefined ? String(yearValue) : undefined;
+    const mileage = mileageValue !== undefined ? `${formatNumber(mileageValue)} км` : undefined;
+    const engine = engineValue !== undefined ? `${engineValue}cc` : undefined;
+    if (price) {
+      fields.push(`Цена: ${price}`);
+    }
+    const modelLine = [brand, model, engine, year].filter(Boolean).join(" ");
+    if (modelLine) {
+      fields.push(`Байк: ${modelLine}`);
+    }
+    if (mileage) {
+      fields.push(`Пробег: ${mileage}`);
+    }
+  } else if (item.adCategory === "currency_exchange") {
+    const rate = formatRate(item);
+    if (rate) {
+      fields.push(`Курс: ${rate}`);
+    }
+  }
+
+  const preview = compactPreview(item.text);
+  const safeLink = sanitizeLink(item.link);
+  const fieldLine = fields.length ? `\n   ${fields.join(" | ")}` : "";
+  return `${idx + 1}. ${preview}${fieldLine}${safeLink ? `\n   ${safeLink}` : ""}`;
+}
+
 function flushChunk(chunks: string[], lines: string[]): void {
   const text = lines.join("\n").trim();
   if (text) {
@@ -207,11 +324,7 @@ export class DigestService {
       }
 
       sectionCount += 1;
-      const lines = group.slice(0, DIGEST_LIMIT_PER_CATEGORY).map((item, idx) => {
-        const preview = compactPreview(item.text);
-        const safeLink = sanitizeLink(item.link);
-        return `${idx + 1}. ${preview}${safeLink ? `\n   ${safeLink}` : ""}`;
-      });
+      const lines = group.slice(0, DIGEST_LIMIT_PER_CATEGORY).map((item, idx) => buildStructuredDigestLine(item, idx));
 
       sections.push(`${toCategoryLabel(category)} (${group.length})\n${lines.join("\n")}`);
     }

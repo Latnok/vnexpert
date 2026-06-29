@@ -20,6 +20,10 @@ function mkResult(params: {
   };
 }
 
+function normalizeSpaces(text: string): string {
+  return text.replace(/\s/g, " ");
+}
+
 describe("DigestService", () => {
   it("returns compact empty digest text when there are no items", async () => {
     const repo = {
@@ -167,5 +171,48 @@ describe("DigestService", () => {
     );
     expect(result.text).toContain("Погода: дождь, 24-30 C, дождь до 70%, ветер до 18 км/ч");
     expect(result.text).toContain("Курс ЦБ: 1 RUB = 310,25 VND (10.03.2026)");
+  });
+
+  it("highlights important structured fields for real estate, bikes and currency", async () => {
+    const repo = {
+      async digestMessages(): Promise<SearchResult[]> {
+        return [
+          {
+            ...mkResult({ id: 1, category: "real_estate_rent", text: "Студия у моря", link: "https://t.me/c/1/1" }),
+            realEstate: {
+              price_primary: { amount: 8_500_000, currency: "VND", period: "month" },
+              location: { district: "South", complex: "Muong Thanh" }
+            }
+          },
+          {
+            ...mkResult({ id: 2, category: "bike_rent", text: "Продам Yamaha NVX", link: "https://t.me/c/1/2" }),
+            bike: {
+              bike_brand: "Yamaha",
+              bike_model: "NVX",
+              engine_cc: 155,
+              year: 2021,
+              mileage_km: 33000,
+              price_primary: { amount: 12_000_000, currency: "VND" }
+            }
+          },
+          {
+            ...mkResult({ id: 3, category: "currency_exchange", text: "Обмен рублей", link: "https://t.me/c/1/3" }),
+            rubRateVnd: 326.95
+          }
+        ];
+      }
+    };
+
+    const service = new DigestService(repo as never);
+    const result = await service.buildDigest({
+      categories: ["real_estate_rent", "bike_rent", "currency_exchange"],
+      timezone: "Asia/Bangkok",
+      now: new Date("2026-03-10T02:00:00.000Z")
+    });
+
+    const text = normalizeSpaces(result.text);
+    expect(text).toContain("Цена: 8 500 000 VND month | Район: South | ЖК: Muong Thanh");
+    expect(text).toContain("Цена: 12 000 000 VND | Байк: Yamaha NVX 155cc 2021 | Пробег: 33 000 км");
+    expect(text).toContain("Курс: 1 RUB = 326,95 VND");
   });
 });

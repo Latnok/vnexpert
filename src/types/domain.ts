@@ -104,6 +104,7 @@ export type SearchResult = {
   usdRateVnd?: number;
   usdtRateVnd?: number;
   realEstate?: Record<string, unknown>;
+  bike?: Record<string, unknown>;
 };
 
 export type AskResponse = {
@@ -127,6 +128,26 @@ export type MessageDoc = {
   status: "active" | "edited" | "deleted";
   classification_confidence?: number;
   extracted_currency?: Partial<Record<CurrencyPair, unknown>>;
+  extracted_bike?: {
+    is_bike_ad?: boolean;
+    deal_type?: BikeDealType;
+    bike_brand?: string;
+    bike_model?: string;
+    engine_cc?: number;
+    location?: {
+      raw?: string;
+      normalized?: string;
+      district?: string;
+    } | null;
+    price_primary?: {
+      amount?: number;
+      currency?: string;
+      period?: string;
+    } | null;
+    condition?: string;
+    year?: number;
+    mileage_km?: number;
+  } | Record<string, unknown> | null;
   extracted_real_estate?: {
     parser_version?: string;
     price_detected?: boolean;

@@ -53,6 +53,7 @@ export class MessagesRepository {
       ad_category: 1,
       media_links: 1,
       extracted_currency: 1,
+      extracted_bike: 1,
       extracted_real_estate: 1
     };
     let sort: Sort = { date: -1 };
@@ -81,7 +82,8 @@ export class MessagesRepository {
         rubRateVnd: extractRubRateFromDoc(doc),
         usdRateVnd: extractUsdRateFromDoc(doc),
         usdtRateVnd: extractUsdtRateFromDoc(doc),
-        realEstate: doc.extracted_real_estate && typeof doc.extracted_real_estate === "object" ? doc.extracted_real_estate : undefined
+        realEstate: doc.extracted_real_estate && typeof doc.extracted_real_estate === "object" ? doc.extracted_real_estate : undefined,
+        bike: doc.extracted_bike && typeof doc.extracted_bike === "object" ? doc.extracted_bike : undefined
       };
     });
   }
@@ -118,18 +120,47 @@ export class MessagesRepository {
         "extracted_real_estate.price_primary.amount": { $lte: realEstateFilters.maxPriceVnd }
       } as Filter<MessageDoc>);
     }
+    const categoryQualityClauses: Filter<MessageDoc>[] = [];
     if (realEstateClauses.length > 0) {
-      filter.$and = [
-        {
-          $or: [
-            { ad_category: { $ne: "real_estate_rent" } },
-            {
-              ad_category: "real_estate_rent",
-              $and: realEstateClauses
-            } as Filter<MessageDoc>
-          ]
-        } as Filter<MessageDoc>
-      ];
+      categoryQualityClauses.push({
+        $or: [
+          { ad_category: { $ne: "real_estate_rent" } },
+          {
+            ad_category: "real_estate_rent",
+            $and: realEstateClauses
+          } as Filter<MessageDoc>
+        ]
+      } as Filter<MessageDoc>);
+    }
+    if (params.categories.includes("bike_rent")) {
+      categoryQualityClauses.push({
+        $or: [
+          { ad_category: { $ne: "bike_rent" } },
+          {
+            ad_category: "bike_rent",
+            "extracted_bike.is_bike_ad": true,
+            "extracted_bike.price_primary.amount": { $gt: 0 }
+          }
+        ]
+      } as Filter<MessageDoc>);
+    }
+    if (params.categories.includes("currency_exchange")) {
+      categoryQualityClauses.push({
+        $or: [
+          { ad_category: { $ne: "currency_exchange" } },
+          {
+            ad_category: "currency_exchange",
+            $or: [
+              { "extracted_currency.vnd_rub.vnd_per_unit": { $gt: 0 } },
+              { "extracted_currency.vnd_usd.vnd_per_unit": { $gt: 0 } },
+              { "extracted_currency.vnd_usdt.vnd_per_unit": { $gt: 0 } }
+            ]
+          } as Filter<MessageDoc>
+        ]
+      } as Filter<MessageDoc>);
+    }
+    if (categoryQualityClauses.length > 0) {
+      filter.$and = categoryQualityClauses;
     }
 
     const docs = await this.collection
@@ -144,6 +175,7 @@ export class MessagesRepository {
           ad_category: 1,
           media_links: 1,
           extracted_currency: 1,
+          extracted_bike: 1,
           extracted_real_estate: 1
         }
       })
@@ -174,7 +206,8 @@ export class MessagesRepository {
         rubRateVnd: extractRubRateFromDoc(doc),
         usdRateVnd: extractUsdRateFromDoc(doc),
         usdtRateVnd: extractUsdtRateFromDoc(doc),
-        realEstate: doc.extracted_real_estate && typeof doc.extracted_real_estate === "object" ? doc.extracted_real_estate : undefined
+        realEstate: doc.extracted_real_estate && typeof doc.extracted_real_estate === "object" ? doc.extracted_real_estate : undefined,
+        bike: doc.extracted_bike && typeof doc.extracted_bike === "object" ? doc.extracted_bike : undefined
       });
     }
 
