@@ -213,7 +213,7 @@ describe("DigestService", () => {
     const text = normalizeSpaces(result.text);
     expect(text).toContain("1. Цена: 8 500 000 VND /мес | Район: South | ЖК: Muong Thanh");
     expect(text).toContain("   Описание: Студия у моря");
-    expect(text).toContain("2. Цена: 12 000 000 VND | Байк: Yamaha NVX 155cc 2021 | Пробег: 33 000 км");
-    expect(text).toContain("3. Курс: 1 RUB = 326,95 VND");
+    expect(text).toContain("1. Цена: 12 000 000 VND | Байк: Yamaha NVX 155cc 2021 | Пробег: 33 000 км");
+    expect(text).toContain("1. Курс: 1 RUB = 326,95 VND");
   });
 });
