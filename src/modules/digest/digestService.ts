@@ -16,6 +16,8 @@ const DIGEST_LOOKBACK_HOURS = 24;
 const DIGEST_LIMIT_PER_CATEGORY = 5;
 const PREVIEW_MAX_LEN = 120;
 const DIGEST_MAX_MESSAGE_LEN = 3500;
+const DIGEST_VALUE_MAX_LEN = 48;
+const MAX_REASONABLE_BIKE_PRICE_VND = 500_000_000;
 
 function toCategoryLabel(category: string): string {
   return DIGEST_CATEGORY_LABELS[category as AdCategory] ?? category;
@@ -54,12 +56,39 @@ function cleanValue(value: unknown): string | undefined {
   return clean || undefined;
 }
 
+function compactValue(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  if (value.length <= DIGEST_VALUE_MAX_LEN) {
+    return value;
+  }
+  return `${value.slice(0, DIGEST_VALUE_MAX_LEN - 3).trimEnd()}...`;
+}
+
 function numberValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function nestedRecord(source: Record<string, unknown> | undefined, key: string): Record<string, unknown> | undefined {
   return asRecord(source?.[key]);
+}
+
+function formatPeriod(period: unknown): string | undefined {
+  if (typeof period !== "string" || !period.trim()) {
+    return undefined;
+  }
+  const normalized = period.trim().toLowerCase();
+  if (normalized === "month") {
+    return "/мес";
+  }
+  if (normalized === "week") {
+    return "/нед";
+  }
+  if (normalized === "day") {
+    return "/день";
+  }
+  return period.trim();
 }
 
 function formatMoney(amount: unknown, currency: unknown, period?: unknown): string | undefined {
@@ -69,13 +98,22 @@ function formatMoney(amount: unknown, currency: unknown, period?: unknown): stri
   const parts = [
     formatNumber(amount),
     typeof currency === "string" && currency.trim() ? currency.trim() : "VND",
-    typeof period === "string" && period.trim() ? period.trim() : undefined
+    formatPeriod(period)
   ].filter(Boolean);
   return parts.join(" ");
 }
 
-function formatPricePrimary(source: Record<string, unknown> | undefined): string | undefined {
+function formatPricePrimary(source: Record<string, unknown> | undefined, options?: { maxAmount?: number }): string | undefined {
   const price = nestedRecord(source, "price_primary");
+  const amount = price?.amount;
+  if (
+    typeof amount === "number" &&
+    options?.maxAmount !== undefined &&
+    Number.isFinite(amount) &&
+    amount > options.maxAmount
+  ) {
+    return undefined;
+  }
   return formatMoney(price?.amount, price?.currency, price?.period);
 }
 
@@ -114,8 +152,8 @@ function buildStructuredDigestLine(item: SearchResult, idx: number): string {
   if (item.adCategory === "real_estate_rent") {
     const realEstate = item.realEstate;
     const price = formatPricePrimary(realEstate);
-    const location = formatLocation(realEstate);
-    const complex = formatComplex(realEstate);
+    const location = compactValue(formatLocation(realEstate));
+    const complex = compactValue(formatComplex(realEstate));
     if (price) {
       fields.push(`Цена: ${price}`);
     }
@@ -127,7 +165,7 @@ function buildStructuredDigestLine(item: SearchResult, idx: number): string {
     }
   } else if (item.adCategory === "bike_rent") {
     const bike = item.bike;
-    const price = formatPricePrimary(bike);
+    const price = formatPricePrimary(bike, { maxAmount: MAX_REASONABLE_BIKE_PRICE_VND });
     const brand = cleanValue(bike?.bike_brand);
     const model = cleanValue(bike?.bike_model);
     const yearValue = numberValue(bike?.year);
@@ -155,8 +193,10 @@ function buildStructuredDigestLine(item: SearchResult, idx: number): string {
 
   const preview = compactPreview(item.text);
   const safeLink = sanitizeLink(item.link);
-  const fieldLine = fields.length ? `\n   ${fields.join(" | ")}` : "";
-  return `${idx + 1}. ${preview}${fieldLine}${safeLink ? `\n   ${safeLink}` : ""}`;
+  if (fields.length > 0) {
+    return `${idx + 1}. ${fields.join(" | ")}\n   Описание: ${preview}${safeLink ? `\n   ${safeLink}` : ""}`;
+  }
+  return `${idx + 1}. ${preview}${safeLink ? `\n   ${safeLink}` : ""}`;
 }
 
 function flushChunk(chunks: string[], lines: string[]): void {

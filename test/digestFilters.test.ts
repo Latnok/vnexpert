@@ -81,7 +81,7 @@ describe("digest filters", () => {
             {
               ad_category: "bike_rent",
               "extracted_bike.is_bike_ad": true,
-              "extracted_bike.price_primary.amount": { $gt: 0 }
+              "extracted_bike.price_primary.amount": { $gt: 0, $lte: 500_000_000 }
             }
           ]
         },

@@ -4,6 +4,8 @@ import { dedupeCandidates } from "../../modules/search/dedupe.js";
 import type { DigestFilters, MessageDoc, ParsedQuery, SearchResult } from "../../types/domain.js";
 import { buildTelegramMessageLink } from "../../lib/messageLinks.js";
 
+const MAX_REASONABLE_BIKE_PRICE_VND = 500_000_000;
+
 function extractRubRateFromDoc(doc: MessageDoc): number | undefined {
   const rate = (doc.extracted_currency as { vnd_rub?: { vnd_per_unit?: number } | null } | undefined)?.vnd_rub?.vnd_per_unit;
   return typeof rate === "number" && Number.isFinite(rate) ? rate : undefined;
@@ -139,7 +141,7 @@ export class MessagesRepository {
           {
             ad_category: "bike_rent",
             "extracted_bike.is_bike_ad": true,
-            "extracted_bike.price_primary.amount": { $gt: 0 }
+            "extracted_bike.price_primary.amount": { $gt: 0, $lte: MAX_REASONABLE_BIKE_PRICE_VND }
           }
         ]
       } as Filter<MessageDoc>);
